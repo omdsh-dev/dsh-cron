@@ -38,7 +38,8 @@ function walk(directory) {
 walk(root)
 
 for (const filePath of textFiles) {
-  const rel = relative(root, filePath)
+  // Normalize separators: the self-exemption below compares a forward-slash path.
+  const rel = relative(root, filePath).split(sep).join('/')
   const source = readFileSync(filePath, 'utf8')
   if (rel !== 'scripts/verify-self-contained.mjs') {
     const absolutePath = source.match(/(?:^|\s|["'`(=,:])((?:~\/|\/(?:[^/\s"'`<>]+\/)+[^/\s"'`<>]*|[A-Za-z]:[\\/][^\s"'`<>]+))/m)
