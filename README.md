@@ -52,7 +52,11 @@ Other plugins can drive the same store through the provided `cron` service (`add
 
 ## Delivery
 
-When a job becomes due, dsh-cron picks a target among live root agents: the job's creating session when it is live, otherwise the first idle root, otherwise the first root. An idle target receives a `followup()` turn; a busy target receives an `inject()` notice that rides the next step. With no live root, the job waits overdue and fires when the next root agent appears. Missed occurrences collapse to the latest one; backlogs are never replayed.
+When a job becomes due, dsh-cron picks a target among live root agents: the job's creating session when it is live, otherwise the first idle root, otherwise the first root. An idle target receives a `followup()` turn; a busy target receives an `inject()` notice that rides the next step. With no live root, the job waits overdue and fires when the next root agent appears (an overdue job is retried at most once a minute). Missed occurrences collapse to the latest one; backlogs are never replayed.
+
+### Cold-session wake
+
+With `coldWake: true` in the plugin config, a due job whose creating session is not live resumes that session from persistence — with its recorded preset composition and last model selection — and delivers the task into it, so schedules fire even while no session is open. The default is `false` on purpose: a woken session runs unattended model turns, which spend API quota without anyone watching. `coldWake` requires the profile's session persistence service; enabling it without one fails at load. A job whose creating session cannot be inspected or resumed stays overdue and falls back to the live-target path.
 
 The model receives a stable framing that quotes the prompt as untrusted JSON:
 
@@ -77,11 +81,12 @@ Jobs persist to `cron/jobs.json` inside the Harness home (override with the `dat
 | `defaultTimeZone` | `UTC` | IANA zone for schedules that omit one |
 | `maxJobs` | `64` | Maximum number of jobs |
 | `minIntervalMinutes` | `1` | Minimum gap between two occurrences of one recurring job |
+| `coldWake` | `false` | Resume a due job's cold creating session so the task fires with no live session |
 
 ## Known limitations
 
-- A job needs at least one live root agent to fire; dsh-cron does not resume cold sessions (planned for a later version).
 - Cron fields are numeric only; `JAN`/`MON` style names are rejected.
+- Cold wake resumes only the job's creating session; jobs created without one (older stores) use the live-target path only.
 - Fires are at-least-once within one host run: a crash between message enqueue and store flush can repeat a fire.
 
 ## Development

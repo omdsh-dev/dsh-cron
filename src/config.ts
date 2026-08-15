@@ -15,6 +15,11 @@ export interface Config {
   maxJobs?: number
   /** Minimum minutes between two occurrences of one recurring job. */
   minIntervalMinutes?: number
+  /**
+   * Resume a due job's cold creating session so the task can fire without any
+   * live session. Off by default: a woken session runs unattended model turns.
+   */
+  coldWake?: boolean
 }
 
 /** Configuration after defaults have been resolved. */
@@ -27,6 +32,8 @@ export interface ResolvedConfig {
   maxJobs: number
   /** Minimum minutes between two occurrences of one recurring job. */
   minIntervalMinutes: number
+  /** Resume a due job's cold creating session. */
+  coldWake: boolean
 }
 
 /** Loader-visible configuration schema and defaults. */
@@ -35,6 +42,7 @@ export const Config: z<Config> = z.object({
   defaultTimeZone: z.string().default('UTC'),
   maxJobs: z.number().default(64),
   minIntervalMinutes: z.number().default(1),
+  coldWake: z.boolean().default(false),
 })
 
 /**
@@ -48,5 +56,6 @@ export function resolveConfig(config: Config = {}): ResolvedConfig {
     defaultTimeZone: config.defaultTimeZone ?? 'UTC',
     maxJobs: config.maxJobs ?? 64,
     minIntervalMinutes: config.minIntervalMinutes ?? 1,
+    coldWake: config.coldWake ?? false,
   }
 }

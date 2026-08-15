@@ -36,7 +36,8 @@ export function registerCronCommand(ctx: Context, scheduler: CronScheduler): () 
     name: 'cron',
     description: 'Manage scheduled tasks (dsh-cron)',
     input: { hint: 'list | remove <id> | add <m> <h> <dom> <mon> <dow> <prompt> | add-at <rfc3339> <prompt>' },
-    handler: ({ rawInput }): CommandResult => {
+    handler: ({ rawInput, agent }): CommandResult => {
+      const createdBy = String(agent.id)
       const input = rawInput.trim()
       if (input === '' || input === 'list') return formatList(scheduler)
       if (input.startsWith('remove ')) {
@@ -51,7 +52,7 @@ export function registerCronCommand(ctx: Context, scheduler: CronScheduler): () 
         const space = rest.indexOf(' ')
         if (space === -1) return { kind: 'error', text: USAGE }
         try {
-          const job = scheduler.addJob({ at: rest.slice(0, space), prompt: rest.slice(space + 1) })
+          const job = scheduler.addJob({ at: rest.slice(0, space), prompt: rest.slice(space + 1), createdBy })
           return { kind: 'success', text: `Added ${formatJob(job)}` }
         } catch (error) {
           return { kind: 'error', text: `cron add-at: ${(error as Error).message}` }
@@ -63,7 +64,7 @@ export function registerCronCommand(ctx: Context, scheduler: CronScheduler): () 
         const expression = tokens.slice(0, 5).join(' ')
         const prompt = tokens.slice(5).join(' ')
         try {
-          const job = scheduler.addJob({ cron: expression, prompt })
+          const job = scheduler.addJob({ cron: expression, prompt, createdBy })
           return { kind: 'success', text: `Added ${formatJob(job)}` }
         } catch (error) {
           return { kind: 'error', text: `cron add: ${(error as Error).message}` }

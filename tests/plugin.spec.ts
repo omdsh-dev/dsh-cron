@@ -59,6 +59,10 @@ describe('dsh-cron', () => {
     await harness.dispose()
   })
 
+  it('fails loud when coldWake is enabled without session persistence', async () => {
+    await expect(createPluginHarness({ coldWake: true })).rejects.toThrow('coldWake requires the sessionPersistence service')
+  })
+
   it('rejects invalid schedules with tool-prefixed errors', async () => {
     const harness = await createPluginHarness()
     const tools = harness.registered as unknown as CapturedTool[]

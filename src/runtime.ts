@@ -8,6 +8,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { resolveDshHome } from '@deepseek-ai/dsh-home-paths'
 import { createUserMessage, type UserMessage } from '@deepseek-ai/dsh-llm'
+import { wakeColdSession } from './coldwake.ts'
 import { registerCronCommand } from './command.ts'
 import { resolveConfig, type Config } from './config.ts'
 import { CronScheduler, type CronTarget } from './scheduler.ts'
@@ -78,6 +79,9 @@ export function createPluginRuntime(ctx: Context): PluginRuntime {
  */
 export function apply(ctx: Context, config: Config): void {
   const resolved = resolveConfig(config)
+  if (resolved.coldWake && ctx.get('sessionPersistence') === undefined) {
+    throw new Error('dsh-cron: coldWake requires the sessionPersistence service')
+  }
   const runtime = createPluginRuntime(ctx)
   const dataDir = resolved.dataDir ?? join(resolveDshHome(), 'cron')
   const store = new CronStore(join(dataDir, 'jobs.json'), message => runtime.warn(message))
@@ -92,6 +96,15 @@ export function apply(ctx: Context, config: Config): void {
       const timer = setTimeout(callback, delayMs)
       return () => { clearTimeout(timer) }
     },
+    warn: (message: string) => runtime.warn(message),
+    ...(resolved.coldWake
+      ? {
+          wakeCold: async (job: CronJob) => {
+            const agent = await wakeColdSession(ctx, job.createdBy as string, message => runtime.warn(message))
+            return agent === null ? null : toTarget(agent)
+          },
+        }
+      : {}),
     defaultTimeZone: resolved.defaultTimeZone,
     maxJobs: resolved.maxJobs,
     minIntervalMinutes: resolved.minIntervalMinutes,

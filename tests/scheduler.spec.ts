@@ -14,6 +14,11 @@ function makeTarget(id: string, status: string) {
   }
 }
 
+/** Flush the scheduler's post-pass microtasks. */
+function settle(): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, 0))
+}
+
 describe('CronScheduler', () => {
   let dir: string
   let store: CronStore
@@ -69,7 +74,7 @@ describe('CronScheduler', () => {
     expect(timerDelay).toBe(3_600_000)
   })
 
-  it('delivers a due job as a follow-up to the idle owning target', () => {
+  it('delivers a due job as a follow-up to the idle owning target', async () => {
     const owner = makeTarget('session-a', 'idle')
     targets = [owner]
     const scheduler = makeScheduler()
@@ -78,6 +83,7 @@ describe('CronScheduler', () => {
 
     now = Date.parse('2026-08-15T09:00:01Z')
     timerCallback?.()
+    await settle()
 
     expect(owner.followup).toHaveBeenCalledTimes(1)
     expect(owner.inject).not.toHaveBeenCalled()
@@ -86,7 +92,7 @@ describe('CronScheduler', () => {
     expect(store.list()).toHaveLength(0)
   })
 
-  it('injects instead of interrupting a busy target', () => {
+  it('injects instead of interrupting a busy target', async () => {
     const busy = makeTarget('session-a', 'running')
     targets = [busy]
     const scheduler = makeScheduler()
@@ -95,29 +101,85 @@ describe('CronScheduler', () => {
 
     now = Date.parse('2026-08-15T09:00:01Z')
     timerCallback?.()
+    await settle()
 
     expect(busy.inject).toHaveBeenCalledTimes(1)
     expect(busy.followup).not.toHaveBeenCalled()
   })
 
-  it('holds jobs while no target is live and fires when one appears', () => {
+  it('holds jobs while no target is live and fires when one appears', async () => {
     const scheduler = makeScheduler()
     scheduler.start()
     scheduler.addJob({ prompt: 'once', at: '2026-08-15T09:00:00.000Z' })
 
     now = Date.parse('2026-08-15T10:00:00Z')
     timerCallback?.()
+    await settle()
     expect(delivered).toHaveLength(0)
     expect(store.list()).toHaveLength(1)
+    // An undispatchable overdue job retries on a bounded floor, never a zero-delay spin.
+    expect(timerDelay).toBe(60_000)
 
     const late = makeTarget('session-b', 'idle')
     targets = [late]
     scheduler.notifyTargets()
+    await settle()
     expect(late.followup).toHaveBeenCalledTimes(1)
     expect(store.list()).toHaveLength(0)
   })
 
-  it('advances recurring jobs past the fire time with latest-only catch-up', () => {
+  it('wakes the cold creating session when no target is live', async () => {
+    const woken = makeTarget('session-cold', 'idle')
+    const wakeCold = vi.fn<(job: { createdBy: string | null }) => Promise<CronTarget | null>>()
+      .mockResolvedValue(woken)
+    const scheduler = makeScheduler({ wakeCold })
+    scheduler.start()
+    scheduler.addJob({ prompt: 'once', at: '2026-08-15T09:00:00.000Z', createdBy: 'session-cold' })
+
+    now = Date.parse('2026-08-15T09:00:01Z')
+    timerCallback?.()
+    await settle()
+
+    expect(wakeCold).toHaveBeenCalledTimes(1)
+    expect(woken.followup).toHaveBeenCalledTimes(1)
+    expect(store.list()).toHaveLength(0)
+  })
+
+  it('holds the job when cold wake declines or fails', async () => {
+    const warn = vi.fn()
+    const wakeCold = vi.fn<() => Promise<CronTarget | null>>().mockResolvedValue(null)
+    const scheduler = makeScheduler({ wakeCold, warn })
+    scheduler.start()
+    scheduler.addJob({ prompt: 'once', at: '2026-08-15T09:00:00.000Z', createdBy: 'session-gone' })
+
+    now = Date.parse('2026-08-15T09:00:01Z')
+    timerCallback?.()
+    await settle()
+    expect(wakeCold).toHaveBeenCalledTimes(1)
+    expect(delivered).toHaveLength(0)
+    expect(store.list()).toHaveLength(1)
+
+    wakeCold.mockRejectedValueOnce(new Error('resume exploded'))
+    scheduler.notifyTargets()
+    await settle()
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('resume exploded'))
+    expect(store.list()).toHaveLength(1)
+  })
+
+  it('never cold-wakes a job without a creating session', async () => {
+    const wakeCold = vi.fn<() => Promise<CronTarget | null>>().mockResolvedValue(null)
+    const scheduler = makeScheduler({ wakeCold })
+    scheduler.start()
+    scheduler.addJob({ prompt: 'once', at: '2026-08-15T09:00:00.000Z' })
+
+    now = Date.parse('2026-08-15T09:00:01Z')
+    timerCallback?.()
+    await settle()
+    expect(wakeCold).not.toHaveBeenCalled()
+    expect(store.list()).toHaveLength(1)
+  })
+
+  it('advances recurring jobs past the fire time with latest-only catch-up', async () => {
     const target = makeTarget('session-a', 'idle')
     targets = [target]
     const scheduler = makeScheduler()
@@ -127,6 +189,7 @@ describe('CronScheduler', () => {
     // Wake long after several occurrences were missed: only one dispatch.
     now = Date.parse('2026-08-15T13:30:00Z')
     timerCallback?.()
+    await settle()
     expect(target.followup).toHaveBeenCalledTimes(1)
 
     const job = store.list()[0]

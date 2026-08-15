@@ -8,6 +8,7 @@ The baseline source entries are:
 - `src/cron.ts`: five-field cron parsing and timezone-aware occurrence computation (pure, zero-dependency);
 - `src/store.ts`: the durable JSON job store (the source of truth);
 - `src/scheduler.ts`: timers, due dispatch, and the `ctx.cron` service view;
+- `src/coldwake.ts`: cold-session resume behind the `coldWake` config;
 - `src/tools.ts`: the `cron_add` / `cron_list` / `cron_remove` model tools;
 - `src/command.ts`: the `/cron` human command.
 

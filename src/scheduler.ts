@@ -44,6 +44,13 @@ export interface CronSchedulerOptions {
   deliver(target: CronTarget, message: unknown): void
   /** Arm a one-shot timer; the return value cancels it. */
   armTimer(callback: () => void, delayMs: number): () => void
+  /**
+   * Wake a due job's cold creating session and return it as a target, or null
+   * to leave the job overdue. Absent disables cold wake entirely.
+   */
+  readonly wakeCold?: ((job: CronJob) => Promise<CronTarget | null>) | undefined
+  /** Log a recoverable scheduling problem. */
+  readonly warn?: ((message: string) => void) | undefined
   readonly defaultTimeZone: string
   readonly maxJobs: number
   readonly minIntervalMinutes: number
@@ -62,12 +69,17 @@ export interface CronService {
 /** Largest delay accepted by a Node timer; longer waits are segmented. */
 const MAX_TIMER_DELAY_MS = 2_147_483_647
 
+/** Re-check floor for overdue jobs that found no dispatch target. */
+const OVERDUE_RETRY_MS = 60_000
+
 /**
  * The cron scheduler. Durable state lives in the store; the timer and
  * dispatch bookkeeping are disposable projections rebuilt on start.
  */
 export class CronScheduler {
   private cancelTimer: (() => void) | null = null
+  private firing = false
+  private pendingFire = false
   private readonly specs = new Map<string, CronSpec>()
 
   constructor(private readonly options: CronSchedulerOptions) {}
@@ -83,8 +95,7 @@ export class CronScheduler {
 
   /** Arm the timer and dispatch anything already due. */
   start(): void {
-    this.fireDue()
-    this.arm()
+    this.requestFire()
   }
 
   /** Cancel the timer; durable jobs are untouched. */
@@ -95,8 +106,7 @@ export class CronScheduler {
 
   /** Re-check due jobs, e.g. when a new live target appears. */
   notifyTargets(): void {
-    this.fireDue()
-    this.arm()
+    this.requestFire()
   }
 
   /** List jobs in insertion order. */
@@ -183,7 +193,6 @@ export class CronScheduler {
   }
 
   private arm(): void {
-    if (this.cancelTimer === null && this.options.store.list().length === 0) return
     this.cancelTimer?.()
     this.cancelTimer = null
     let earliest: number | null = null
@@ -192,12 +201,39 @@ export class CronScheduler {
       if (earliest === null || at < earliest) earliest = at
     }
     if (earliest === null) return
-    const delay = Math.min(Math.max(earliest - this.options.now(), 0), MAX_TIMER_DELAY_MS)
+    const raw = earliest - this.options.now()
+    // An overdue job that found no target retries on a bounded floor instead
+    // of spinning a zero-delay timer loop.
+    const delay = Math.min(raw > 0 ? raw : OVERDUE_RETRY_MS, MAX_TIMER_DELAY_MS)
     this.cancelTimer = this.options.armTimer(() => {
       this.cancelTimer = null
-      this.fireDue()
-      this.arm()
+      this.requestFire()
     }, delay)
+  }
+
+  /** Run one dispatch pass, serialized; concurrent requests coalesce. */
+  private requestFire(): void {
+    if (this.firing) {
+      this.pendingFire = true
+      return
+    }
+    this.firing = true
+    void this.runFireDue().then(
+      () => {
+        this.firing = false
+        if (this.pendingFire) {
+          this.pendingFire = false
+          this.requestFire()
+          return
+        }
+        this.arm()
+      },
+      (error: unknown) => {
+        this.firing = false
+        this.options.warn?.(`dsh-cron: dispatch pass failed: ${error instanceof Error ? error.message : String(error)}`)
+        this.arm()
+      },
+    )
   }
 
   private pickTarget(job: CronJob): CronTarget | undefined {
@@ -208,17 +244,31 @@ export class CronScheduler {
     return targets.find(target => target.status === 'idle') ?? targets[0]
   }
 
-  private fireDue(): void {
+  private async runFireDue(): Promise<void> {
     const { store } = this.options
     const now = this.options.now()
     const due = store.list()
       .filter(job => Date.parse(job.nextAt) <= now)
       .sort((a, b) => Date.parse(a.nextAt) - Date.parse(b.nextAt))
     for (const job of due) {
-      const target = this.pickTarget(job)
+      let target = this.pickTarget(job)
+      if (target === undefined && this.options.wakeCold !== undefined && job.createdBy !== null) {
+        try {
+          target = await this.options.wakeCold(job) ?? undefined
+        } catch (error) {
+          this.options.warn?.(`dsh-cron: cold wake failed for ${job.id}: ${error instanceof Error ? error.message : String(error)}`)
+          target = undefined
+        }
+      }
       if (target === undefined) continue
       const scheduledAt = job.nextAt
-      this.options.deliver(target, this.options.buildMessage(job, scheduledAt))
+      try {
+        this.options.deliver(target, this.options.buildMessage(job, scheduledAt))
+      } catch (error) {
+        // A rejected enqueue keeps the job overdue for a later pass.
+        this.options.warn?.(`dsh-cron: delivery failed for ${job.id}: ${error instanceof Error ? error.message : String(error)}`)
+        continue
+      }
       job.lastFiredAt = new Date(now).toISOString()
       job.fireCount += 1
       if (job.schedule.kind === 'at') {
