@@ -9,6 +9,7 @@ The baseline source entries are:
 - `src/store.ts`: the durable JSON job store (the source of truth);
 - `src/scheduler.ts`: timers, due dispatch, and the `ctx.cron` service view;
 - `src/coldwake.ts`: cold-session resume behind the `coldWake` config;
+- `src/lock.ts`: the single-instance scheduler lock for shared Harness homes;
 - `src/tools.ts`: the `cron_add` / `cron_list` / `cron_remove` model tools;
 - `src/command.ts`: the `/cron` human command;
 - `src/rpc.ts`: the loopback `/cron` RPC channel for the browser panel;

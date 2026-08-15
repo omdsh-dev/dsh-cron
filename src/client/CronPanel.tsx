@@ -102,10 +102,19 @@ export function CronPanel(props: CronPanelProps) {
 
   const act = async (endpoint: 'remove' | 'fire', id: string): Promise<void> => {
     try {
-      await callRpc<CronFireWire>(connection, endpoint, { id })
+      if (endpoint === 'fire') {
+        const outcome = await callRpc<CronFireWire>(connection, 'fire', { id })
+        if (outcome.result !== 'fired') {
+          setError(outcome.result === 'no_target'
+            ? `${id}: no live session to run the task (held until one appears)`
+            : `${id}: job not found`)
+        }
+      } else {
+        await callRpc(connection, endpoint, { id })
+      }
       const next = await callRpc<CronListWire>(connection, 'list')
       setList(next)
-      setError(null)
+      if (endpoint !== 'fire') setError(null)
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause))
     }

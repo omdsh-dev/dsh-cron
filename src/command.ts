@@ -8,7 +8,7 @@ import type { CommandResult } from '@deepseek-ai/dsh-commands'
 import type { CronScheduler } from './scheduler.ts'
 import type { CronJob } from './store.ts'
 
-const USAGE = 'Usage: /cron list | /cron remove <id> | /cron add <minute> <hour> <dom> <month> <dow> <prompt...> | /cron add-at <rfc3339> <prompt...>'
+const USAGE = 'Usage: /cron list | /cron remove <id> | /cron add [tz=Zone] <minute> <hour> <dom> <month> <dow> <prompt...> | /cron add-at <rfc3339> <prompt...>'
 
 const WHITESPACE = new RegExp('\\s+')
 
@@ -60,11 +60,18 @@ export function registerCronCommand(ctx: Context, scheduler: CronScheduler): () 
       }
       if (input.startsWith('add ')) {
         const tokens = input.slice('add '.length).trim().split(WHITESPACE)
+        let timeZone: string | undefined
+        if (tokens[0]?.startsWith('tz=')) timeZone = tokens.shift()?.slice(3)
         if (tokens.length < 6) return { kind: 'error', text: USAGE }
         const expression = tokens.slice(0, 5).join(' ')
         const prompt = tokens.slice(5).join(' ')
         try {
-          const job = scheduler.addJob({ cron: expression, prompt, createdBy })
+          const job = scheduler.addJob({
+            cron: expression,
+            prompt,
+            createdBy,
+            ...(timeZone === undefined ? {} : { timeZone }),
+          })
           return { kind: 'success', text: `Added ${formatJob(job)}` }
         } catch (error) {
           return { kind: 'error', text: `cron add: ${(error as Error).message}` }

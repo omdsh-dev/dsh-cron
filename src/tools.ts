@@ -16,7 +16,7 @@ import type { CronScheduler } from './scheduler.ts'
 export function registerCronTools(ctx: Context, scheduler: CronScheduler): void {
   ctx.tools.register(defineTool({
     name: 'cron_add',
-    description: 'Schedule a task for later or recurring delivery to an agent session. The prompt fires as a scheduled-task message: a follow-up turn when the target agent is idle, an injected notification when it is busy.',
+    description: 'Schedule a durable, cross-session task: it survives restarts and fires even when this conversation is closed (prefer this over session-local reminders for anything beyond the current chat). The prompt fires as a scheduled-task follow-up turn that the agent executes.',
     parameters: {
       prompt: {
         type: 'string',
@@ -29,7 +29,7 @@ export function registerCronTools(ctx: Context, scheduler: CronScheduler): void 
       },
       time_zone: {
         type: 'string',
-        description: 'IANA time zone interpreting the cron expression, e.g. "Asia/Shanghai". Defaults to the plugin defaultTimeZone.',
+        description: 'IANA time zone interpreting the cron expression, e.g. "Asia/Shanghai". Defaults to the host local zone (or the plugin defaultTimeZone).',
       },
       at: {
         type: 'string',

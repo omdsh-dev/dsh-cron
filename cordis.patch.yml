@@ -7,10 +7,11 @@
       name: dsh-cron
       # config:
       #   dataDir: <string>            # job store directory; defaults to $DSH_HOME/cron
-      #   defaultTimeZone: UTC         # IANA zone for schedules that omit one
+      #   defaultTimeZone: <string>    # IANA zone for schedules; defaults to the host local zone
       #   maxJobs: 64                  # maximum active jobs
       #   minIntervalMinutes: 1        # minimum gap between recurring fires
       #   coldWake: false              # resume a due job's cold creating session
+      #   busyDelivery: followup       # or 'inject' (busy-target delivery mode)
 
 # No invariant companion row: the shipped web/headless profiles do not compose
 # the `invariants` service, so an invariant row would never resolve there.
