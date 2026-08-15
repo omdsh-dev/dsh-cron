@@ -1,20 +1,24 @@
 import { defineConfig } from 'tsdown'
+import { clientBundle } from './tsdown.client.ts'
 
 /**
  * Consumer-side runtime bundle for Git and tarball installs. The prepare
  * script emits declarations first, then this config bundles source without any
  * repository project references.
  */
-export default defineConfig({
-  entry: {
-    index: 'src/index.ts',
+export default defineConfig([
+  {
+    entry: {
+      index: 'src/index.ts',
+    },
+    outDir: 'lib',
+    format: ['esm'],
+    platform: 'node',
+    target: 'es2024',
+    fixedExtension: false,
+    dts: false,
+    clean: false,
+    tsconfig: 'tsconfig.prepare.json',
   },
-  outDir: 'lib',
-  format: ['esm'],
-  platform: 'node',
-  target: 'es2024',
-  fixedExtension: false,
-  dts: false,
-  clean: false,
-  tsconfig: 'tsconfig.prepare.json',
-})
+  clientBundle(),
+])

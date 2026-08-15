@@ -11,6 +11,7 @@ import { createUserMessage, type UserMessage } from '@deepseek-ai/dsh-llm'
 import { wakeColdSession } from './coldwake.ts'
 import { registerCronCommand } from './command.ts'
 import { resolveConfig, type Config } from './config.ts'
+import { registerCronRpc } from './rpc.ts'
 import { CronScheduler, type CronTarget } from './scheduler.ts'
 import { CronStore, type CronJob } from './store.ts'
 import { registerCronTools } from './tools.ts'
@@ -113,8 +114,12 @@ export function apply(ctx: Context, config: Config): void {
   ctx.provide('cron', scheduler.service())
   ctx.on('agent/created', () => { scheduler.notifyTargets() })
   registerCronTools(ctx, scheduler)
-  ctx.inject(['commands'], commandCtx => {
-    registerCronCommand(commandCtx, scheduler)
+  ctx.inject(['commands'], (commandCtx) => {
+    commandCtx.effect(() => registerCronCommand(commandCtx, scheduler), 'dsh-cron: command')
+  })
+  // Profiles without a browser connection (headless) skip the RPC channel.
+  ctx.inject(['connection'], (connectionCtx) => {
+    connectionCtx.effect(() => registerCronRpc(connectionCtx, scheduler.service()), 'dsh-cron: rpc')
   })
   ctx.effect(() => {
     scheduler.start()

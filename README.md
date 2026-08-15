@@ -40,7 +40,11 @@ Human command with the same store:
 /cron remove cron-3
 ```
 
-Other plugins can drive the same store through the provided `cron` service (`add` / `remove` / `list`).
+Other plugins can drive the same store through the provided `cron` service (`add` / `remove` / `list` / `fireNow`).
+
+## Web panel
+
+In the `web` profile, dsh-cron ships a browser half: a `⏰ Cron` action in the sidebar footer opens a panel listing every job (schedule, next fire, fire count) with **Run now** and **Delete** actions. The panel talks to the host over the loopback `/cron` RPC channel (`list` / `remove` / `fire`) and polls every 30 seconds while open. Headless profiles skip the channel automatically.
 
 ## Schedules
 
@@ -104,4 +108,4 @@ pnpm run prepare
 
 ## License
 
-BSD-3-Clause; see `LICENSE`.
+MIT; see `LICENSE`.

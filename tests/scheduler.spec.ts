@@ -197,6 +197,24 @@ describe('CronScheduler', () => {
     expect(Date.parse(job?.nextAt ?? '')).toBeGreaterThan(now)
   })
 
+  it('fires a job on demand through fireNow', async () => {
+    const target = makeTarget('session-a', 'idle')
+    targets = [target]
+    const scheduler = makeScheduler()
+    scheduler.start()
+    scheduler.addJob({ prompt: 'later', at: '2026-08-16T09:00:00.000Z' })
+
+    expect(await scheduler.fireNow('cron-1')).toBe('fired')
+    expect(target.followup).toHaveBeenCalledTimes(1)
+    expect(store.list()).toHaveLength(0)
+    expect(await scheduler.fireNow('cron-1')).toBe('not_found')
+
+    scheduler.addJob({ prompt: 'held', at: '2026-08-16T09:00:00.000Z' })
+    targets = []
+    expect(await scheduler.fireNow('cron-2')).toBe('no_target')
+    expect(store.list()).toHaveLength(1)
+  })
+
   it('enforces validation and capacity limits', () => {
     const scheduler = makeScheduler()
     scheduler.start()

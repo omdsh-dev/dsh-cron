@@ -64,6 +64,8 @@ export interface CronService {
   remove(id: string): boolean
   /** List all jobs. */
   list(): readonly CronJob[]
+  /** Dispatch one job immediately, independent of its schedule. */
+  fireNow(id: string): Promise<'fired' | 'not_found' | 'no_target'>
 }
 
 /** Largest delay accepted by a Node timer; longer waits are segmented. */
@@ -90,6 +92,7 @@ export class CronScheduler {
       add: input => this.addJob(input),
       remove: id => this.removeJob(id),
       list: () => this.listJobs(),
+      fireNow: id => this.fireNow(id),
     }
   }
 
@@ -183,6 +186,19 @@ export class CronScheduler {
     return removed
   }
 
+  /**
+   * Dispatch one job immediately through the ordinary delivery path. A fired
+   * one-shot is removed; a recurring job advances to its next occurrence.
+   */
+  async fireNow(id: string): Promise<'fired' | 'not_found' | 'no_target'> {
+    const job = this.options.store.get(id)
+    if (job === undefined) return 'not_found'
+    const result = await this.dispatchJob(job, this.options.now())
+    this.options.store.flush()
+    this.arm()
+    return result
+  }
+
   private specFor(job: CronJob): CronSpec | null {
     if (job.schedule.kind !== 'cron') return null
     const cached = this.specs.get(job.id)
@@ -251,41 +267,51 @@ export class CronScheduler {
       .filter(job => Date.parse(job.nextAt) <= now)
       .sort((a, b) => Date.parse(a.nextAt) - Date.parse(b.nextAt))
     for (const job of due) {
-      let target = this.pickTarget(job)
-      if (target === undefined && this.options.wakeCold !== undefined && job.createdBy !== null) {
-        try {
-          target = await this.options.wakeCold(job) ?? undefined
-        } catch (error) {
-          this.options.warn?.(`dsh-cron: cold wake failed for ${job.id}: ${error instanceof Error ? error.message : String(error)}`)
-          target = undefined
-        }
-      }
-      if (target === undefined) continue
-      const scheduledAt = job.nextAt
-      try {
-        this.options.deliver(target, this.options.buildMessage(job, scheduledAt))
-      } catch (error) {
-        // A rejected enqueue keeps the job overdue for a later pass.
-        this.options.warn?.(`dsh-cron: delivery failed for ${job.id}: ${error instanceof Error ? error.message : String(error)}`)
-        continue
-      }
-      job.lastFiredAt = new Date(now).toISOString()
-      job.fireCount += 1
-      if (job.schedule.kind === 'at') {
-        store.remove(job.id)
-        this.specs.delete(job.id)
-        continue
-      }
-      const spec = this.specFor(job)
-      // Latest-only catch-up: missed occurrences are collapsed, never replayed.
-      const next = spec === null ? null : nextOccurrence(spec, now, job.schedule.timeZone)
-      if (next === null) {
-        store.remove(job.id)
-        this.specs.delete(job.id)
-      } else {
-        job.nextAt = new Date(next).toISOString()
-      }
+      await this.dispatchJob(job, now)
     }
     if (due.length > 0) store.flush()
+  }
+
+  /**
+   * Dispatch one due job: pick or wake a target, deliver, then advance or
+   * retire the schedule. Returns the outcome for direct callers.
+   */
+  private async dispatchJob(job: CronJob, now: number): Promise<'fired' | 'no_target'> {
+    const { store } = this.options
+    let target = this.pickTarget(job)
+    if (target === undefined && this.options.wakeCold !== undefined && job.createdBy !== null) {
+      try {
+        target = await this.options.wakeCold(job) ?? undefined
+      } catch (error) {
+        this.options.warn?.(`dsh-cron: cold wake failed for ${job.id}: ${error instanceof Error ? error.message : String(error)}`)
+        target = undefined
+      }
+    }
+    if (target === undefined) return 'no_target'
+    const scheduledAt = job.nextAt
+    try {
+      this.options.deliver(target, this.options.buildMessage(job, scheduledAt))
+    } catch (error) {
+      // A rejected enqueue keeps the job overdue for a later pass.
+      this.options.warn?.(`dsh-cron: delivery failed for ${job.id}: ${error instanceof Error ? error.message : String(error)}`)
+      return 'no_target'
+    }
+    job.lastFiredAt = new Date(now).toISOString()
+    job.fireCount += 1
+    if (job.schedule.kind === 'at') {
+      store.remove(job.id)
+      this.specs.delete(job.id)
+      return 'fired'
+    }
+    const spec = this.specFor(job)
+    // Latest-only catch-up: missed occurrences are collapsed, never replayed.
+    const next = spec === null ? null : nextOccurrence(spec, now, job.schedule.timeZone)
+    if (next === null) {
+      store.remove(job.id)
+      this.specs.delete(job.id)
+    } else {
+      job.nextAt = new Date(next).toISOString()
+    }
+    return 'fired'
   }
 }

@@ -10,6 +10,8 @@ The baseline source entries are:
 - `src/scheduler.ts`: timers, due dispatch, and the `ctx.cron` service view;
 - `src/coldwake.ts`: cold-session resume behind the `coldWake` config;
 - `src/tools.ts`: the `cron_add` / `cron_list` / `cron_remove` model tools;
-- `src/command.ts`: the `/cron` human command.
+- `src/command.ts`: the `/cron` human command;
+- `src/rpc.ts`: the loopback `/cron` RPC channel for the browser panel;
+- `src/client/`: the browser half (sidebar footer panel), discovered through the `dsh.client` manifest.
 
 Keep the baseline files focused. Extend `src/config.ts` rather than hiding deployment choices in implementation constants; extend `src/runtime.ts` with fakeable process, clock, transport, or UI boundaries.
