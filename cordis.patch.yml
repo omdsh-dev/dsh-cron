@@ -1,0 +1,15 @@
+# Bundle patch applied over the selected DSH profile when this package is listed
+# in `dsh.profile.bundles`. The row id is deployment-local; the package name
+# must match package.json.
+
+- insert:
+    - id: dsh-cron
+      name: dsh-cron
+      # config:
+      #   dataDir: <string>            # job store directory; defaults to $DSH_HOME/cron
+      #   defaultTimeZone: UTC         # IANA zone for schedules that omit one
+      #   maxJobs: 64                  # maximum active jobs
+      #   minIntervalMinutes: 1        # minimum gap between recurring fires
+
+# No invariant companion row: the shipped web/headless profiles do not compose
+# the `invariants` service, so an invariant row would never resolve there.
