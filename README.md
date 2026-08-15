@@ -4,6 +4,8 @@
 
 # dsh-cron
 
+English | [中文](README.zh.md)
+
 Scheduled tasks for DeepSeek Harness: five-field cron calendar rules with IANA time zones, durable jobs stored in the Harness home, and delivery into agent sessions — including waking a cold session so a schedule fires even when nothing is open.
 
 The built-in `@deepseek-ai/dsh-schedule` covers session-local reminders (`at` / `after_seconds` / `every_seconds`) and deliberately defers calendar rules and cross-session delivery. dsh-cron is the other half: jobs survive restarts, are not tied to one conversation, and report what happened.
