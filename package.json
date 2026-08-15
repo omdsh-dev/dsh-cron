@@ -14,6 +14,7 @@
     "typecheck": "tsc -b --pretty false && tsc -p tsconfig.vitest.json --pretty false",
     "verify:self-contained": "node scripts/verify-self-contained.mjs",
     "prepare": "node scripts/prepare.mjs",
+    "prepack": "pnpm run typecheck && pnpm test && pnpm run build",
     "extract:patch": "node scripts/extract-patch.mjs",
     "patch:host": "bash scripts/patch.sh"
   },
@@ -28,11 +29,11 @@
     "./package.json": "./package.json"
   },
   "files": [
-    "lib/index.js",
-    "lib/types/**/*.d.ts",
-    "lib/types/**/*.d.ts.map",
+    "lib",
     "src",
-    "cordis.patch.yml"
+    "cordis.patch.yml",
+    "README.md",
+    "LICENSE"
   ],
   "license": "BSD-3-Clause",
   "peerDependencies": {
@@ -82,6 +83,31 @@
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"
+    }
+  },
+  "dshWorkshop": {
+    "schema": "omdsh-workshop-package/v1",
+    "type": "plugin",
+    "integration": {
+      "protocol": "harness-profile",
+      "artifact": "cordis.patch.yml"
+    },
+    "install": {
+      "mode": "transactional",
+      "adapter": "profile-bundle",
+      "failurePolicy": "generation-rollback",
+      "touchesCurrentBeforeActivation": false
+    },
+    "lifecycle": {
+      "activation": "restart-profile",
+      "dispose": "supported"
+    },
+    "permissions": ["filesystem:write", "llm:invoke"],
+    "evidence": {
+      "install": null,
+      "failureIsolation": null,
+      "hotReload": null,
+      "remove": null
     }
   }
 }
