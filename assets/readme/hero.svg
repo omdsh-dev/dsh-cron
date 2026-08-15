@@ -1,0 +1,89 @@
+<svg xmlns="http://www.w3.org/2000/svg"
+     width="1200" height="400" viewBox="0 0 1200 400"
+     role="img" aria-labelledby="title desc">
+  <title id="title">dsh-cron — scheduled tasks for DeepSeek Harness</title>
+  <desc id="desc">Project title with a clock face as the letter o in cron, beside a five-step loop: a cron schedule fires on time, wakes a cold session, runs the task as a follow-up turn, and records the run outcome.</desc>
+
+  <rect width="1200" height="400" rx="26" fill="#0B0F14"/>
+
+  <g id="title-block">
+    <text x="72" y="98" font-family="ui-monospace, SFMono-Regular, Menlo, monospace"
+          font-size="20" letter-spacing="4" fill="#8494A3">DEEPSEEK HARNESS PLUGIN</text>
+
+    <!-- title lockup: clock mark (hands at 09:00) + wordmark -->
+    <g transform="translate(72 0)">
+      <g transform="translate(38 158)">
+        <circle r="36" fill="#0B0F14" stroke="#F0B429" stroke-width="5"/>
+        <path d="M0 -36 L0 -26 M36 0 L26 0 M0 36 L0 26 M-36 0 L-26 0"
+              stroke="#F0B429" stroke-width="3.5" stroke-linecap="round" opacity="0.6"/>
+        <path d="M0 0 L0 -20" stroke="#F0B429" stroke-width="5" stroke-linecap="round"/>
+        <path d="M0 0 L-20 0" stroke="#F0B429" stroke-width="5" stroke-linecap="round"/>
+        <circle r="3.5" fill="#F0B429"/>
+      </g>
+      <text x="96" y="184" font-family="ui-monospace, SFMono-Regular, Menlo, monospace"
+            font-size="72" font-weight="700" fill="#E6EDF3">dsh-cron</text>
+    </g>
+
+    <text x="72" y="254" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+          font-size="25" fill="#C4CFDA">Cron-true scheduled tasks for agent sessions —</text>
+    <text x="72" y="292" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+          font-size="25" fill="#C4CFDA">on calendar rules, <tspan fill="#F0B429">even when no session is open</tspan>.</text>
+
+    <path d="M72 330 L600 330" stroke="#222C38" stroke-width="1.5"/>
+    <text x="72" y="362" font-family="ui-monospace, SFMono-Regular, Menlo, monospace"
+          font-size="18" fill="#8494A3">MIT · zero runtime deps · omdsh-dev/dsh-cron</text>
+  </g>
+
+  <g id="loop-proof">
+    <rect x="672" y="56" width="456" height="288" rx="16" fill="#10161E" stroke="#222C38"/>
+
+    <!-- spine -->
+    <path d="M700 100 L700 292" stroke="#2A3644" stroke-width="3"/>
+
+    <!-- step 1: schedule -->
+    <g transform="translate(0 100)">
+      <circle cx="700" cy="0" r="7" fill="#10161E" stroke="#F0B429" stroke-width="3"/>
+      <text x="726" y="7" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+            font-size="20" font-weight="600" fill="#E6EDF3">SCHEDULE</text>
+      <text x="726" y="31" font-family="ui-monospace, SFMono-Regular, Menlo, monospace"
+            font-size="17" fill="#8494A3">0 9 * * 1-5 · Asia/Shanghai</text>
+    </g>
+
+    <!-- step 2: fire -->
+    <g transform="translate(0 148)">
+      <circle cx="700" cy="0" r="7" fill="#F0B429"/>
+      <text x="726" y="7" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+            font-size="20" font-weight="600" fill="#E6EDF3">FIRE</text>
+      <text x="726" y="31" font-family="ui-monospace, SFMono-Regular, Menlo, monospace"
+            font-size="17" fill="#8494A3">on time, even with no session open</text>
+    </g>
+
+    <!-- step 3: wake -->
+    <g transform="translate(0 196)">
+      <circle cx="700" cy="0" r="7" fill="#5B9DFF"/>
+      <text x="726" y="7" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+            font-size="20" font-weight="600" fill="#E6EDF3">WAKE</text>
+      <text x="726" y="31" font-family="ui-monospace, SFMono-Regular, Menlo, monospace"
+            font-size="17" fill="#8494A3">resumes the cold creating session</text>
+    </g>
+
+    <!-- step 4: run -->
+    <g transform="translate(0 244)">
+      <circle cx="700" cy="0" r="7" fill="#5B9DFF"/>
+      <text x="726" y="7" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+            font-size="20" font-weight="600" fill="#E6EDF3">RUN</text>
+      <text x="726" y="31" font-family="ui-monospace, SFMono-Regular, Menlo, monospace"
+            font-size="17" fill="#8494A3">the follow-up turn executes the task</text>
+    </g>
+
+    <!-- step 5: record -->
+    <g transform="translate(0 292)">
+      <circle cx="700" cy="0" r="7" fill="#F0B429"/>
+      <path d="M696.5 0 L699 2.6 L704 -3.4" stroke="#0B0F14" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+      <text x="726" y="7" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+            font-size="20" font-weight="600" fill="#E6EDF3">RECORD</text>
+      <text x="726" y="31" font-family="ui-monospace, SFMono-Regular, Menlo, monospace"
+            font-size="17" fill="#8494A3">lastRun: completed · "LOOP-CLOSED"</text>
+    </g>
+  </g>
+</svg>
