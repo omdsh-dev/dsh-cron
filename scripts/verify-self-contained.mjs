@@ -131,7 +131,7 @@ for (const skillName of skillNames) {
     failures.push(`${skillName}: missing SKILL.md or agents/openai.yaml`)
     continue
   }
-  const skillSource = readFileSync(skillPath, 'utf8')
+  const skillSource = readFileSync(skillPath, 'utf8').replace(/\r\n/g, '\n')
   const frontmatter = skillSource.match(/^---\n([\s\S]*?)\n---\n/)
   const declaredName = frontmatter?.[1].match(/^name:\s*(.+)$/m)?.[1].trim()
   const description = frontmatter?.[1].match(/^description:\s*(.+)$/m)?.[1].trim()
