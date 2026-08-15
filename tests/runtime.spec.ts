@@ -30,6 +30,9 @@ const job: CronJob = {
   nextAt: '2026-08-16T09:00:00.000Z',
   lastFiredAt: null,
   fireCount: 0,
+  state: 'active',
+  paused: false,
+  lastRun: null,
 }
 
 describe('createPluginRuntime', () => {

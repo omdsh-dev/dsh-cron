@@ -14,6 +14,9 @@ function makeJob(id: string): CronJob {
     nextAt: '2027-01-01T00:00:00.000Z',
     lastFiredAt: null,
     fireCount: 0,
+    state: 'active',
+    paused: false,
+    lastRun: null,
   }
 }
 

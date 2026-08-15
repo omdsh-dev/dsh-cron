@@ -8,7 +8,7 @@ import type { CommandResult } from '@deepseek-ai/dsh-commands'
 import type { CronScheduler } from './scheduler.ts'
 import type { CronJob } from './store.ts'
 
-const USAGE = 'Usage: /cron list | /cron remove <id> | /cron add [tz=Zone] <minute> <hour> <dom> <month> <dow> <prompt...> | /cron add-at <rfc3339> <prompt...>'
+const USAGE = 'Usage: /cron list | /cron remove <id> | /cron pause <id> | /cron resume <id> | /cron add [tz=Zone] <minute> <hour> <dom> <month> <dow> <prompt...> | /cron add-at <rfc3339> <prompt...>'
 
 const WHITESPACE = new RegExp('\\s+')
 
@@ -16,7 +16,9 @@ function formatJob(job: CronJob): string {
   const schedule = job.schedule.kind === 'cron'
     ? `cron "${job.schedule.expression}" (${job.schedule.timeZone})`
     : `at ${job.schedule.at}`
-  return `${job.id}  ${schedule}  next ${job.nextAt}  fired ${job.fireCount}x  ${job.prompt}`
+  const state = job.state === 'done' ? 'done' : job.paused ? 'paused' : `next ${job.nextAt}`
+  const run = job.lastRun === null ? '' : `  last run ${job.lastRun.outcome}`
+  return `${job.id}  ${schedule}  ${state}  fired ${job.fireCount}x${run}  ${job.prompt}`
 }
 
 function formatList(scheduler: CronScheduler): CommandResult {
@@ -47,13 +49,21 @@ export function registerCronCommand(ctx: Context, scheduler: CronScheduler): () 
           ? { kind: 'success', text: `Removed ${id}.` }
           : { kind: 'error', text: `No such job: ${id}` }
       }
+      if (input.startsWith('pause ') || input.startsWith('resume ')) {
+        const pause = input.startsWith('pause ')
+        const id = input.slice(pause ? 'pause '.length : 'resume '.length).trim()
+        if (id.length === 0) return { kind: 'error', text: USAGE }
+        return scheduler.setPaused(id, pause)
+          ? { kind: 'success', text: `${pause ? 'Paused' : 'Resumed'} ${id}.` }
+          : { kind: 'error', text: `No such active job: ${id}` }
+      }
       if (input.startsWith('add-at ')) {
         const rest = input.slice('add-at '.length).trim()
         const space = rest.indexOf(' ')
         if (space === -1) return { kind: 'error', text: USAGE }
         try {
-          const job = scheduler.addJob({ at: rest.slice(0, space), prompt: rest.slice(space + 1), createdBy })
-          return { kind: 'success', text: `Added ${formatJob(job)}` }
+          const result = scheduler.addJob({ at: rest.slice(0, space), prompt: rest.slice(space + 1), createdBy })
+          return { kind: 'success', text: `Added ${formatJob(result.job)}` }
         } catch (error) {
           return { kind: 'error', text: `cron add-at: ${(error as Error).message}` }
         }
@@ -66,13 +76,13 @@ export function registerCronCommand(ctx: Context, scheduler: CronScheduler): () 
         const expression = tokens.slice(0, 5).join(' ')
         const prompt = tokens.slice(5).join(' ')
         try {
-          const job = scheduler.addJob({
+          const result = scheduler.addJob({
             cron: expression,
             prompt,
             createdBy,
             ...(timeZone === undefined ? {} : { timeZone }),
           })
-          return { kind: 'success', text: `Added ${formatJob(job)}` }
+          return { kind: 'success', text: `Added ${formatJob(result.job)}` }
         } catch (error) {
           return { kind: 'error', text: `cron add: ${(error as Error).message}` }
         }

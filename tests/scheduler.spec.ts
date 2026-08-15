@@ -69,8 +69,8 @@ describe('CronScheduler', () => {
   it('arms the timer for the earliest pending job on add', () => {
     const scheduler = makeScheduler()
     scheduler.start()
-    const job = scheduler.addJob({ prompt: 'daily', cron: '0 9 * * *' })
-    expect(job.nextAt).toBe('2026-08-15T09:00:00.000Z')
+    const result = scheduler.addJob({ prompt: 'daily', cron: '0 9 * * *' })
+    expect(result.job.nextAt).toBe('2026-08-15T09:00:00.000Z')
     expect(timerDelay).toBe(3_600_000)
   })
 
@@ -79,7 +79,7 @@ describe('CronScheduler', () => {
     targets = [owner]
     const scheduler = makeScheduler()
     scheduler.start()
-    const job = scheduler.addJob({ prompt: 'once', at: '2026-08-15T09:00:00.000Z', createdBy: 'session-a' })
+    const result = scheduler.addJob({ prompt: 'once', at: '2026-08-15T09:00:00.000Z', createdBy: 'session-a' })
 
     now = Date.parse('2026-08-15T09:00:01Z')
     timerCallback?.()
@@ -87,9 +87,9 @@ describe('CronScheduler', () => {
 
     expect(owner.followup).toHaveBeenCalledTimes(1)
     expect(owner.inject).not.toHaveBeenCalled()
-    expect(delivered[0]?.message).toMatchObject({ job: job.id, scheduledAt: '2026-08-15T09:00:00.000Z' })
-    // A fired one-shot leaves the store.
-    expect(store.list()).toHaveLength(0)
+    expect(delivered[0]?.message).toMatchObject({ job: result.job.id, scheduledAt: '2026-08-15T09:00:00.000Z' })
+    // A fired one-shot stays as done history.
+    expect(store.list()[0]?.state).toBe('done')
   })
 
   it('injects instead of interrupting a busy target', async () => {
@@ -125,7 +125,7 @@ describe('CronScheduler', () => {
     scheduler.notifyTargets()
     await settle()
     expect(late.followup).toHaveBeenCalledTimes(1)
-    expect(store.list()).toHaveLength(0)
+    expect(store.list()[0]?.state).toBe('done')
   })
 
   it('wakes the cold creating session when no target is live', async () => {
@@ -142,7 +142,7 @@ describe('CronScheduler', () => {
 
     expect(wakeCold).toHaveBeenCalledTimes(1)
     expect(woken.followup).toHaveBeenCalledTimes(1)
-    expect(store.list()).toHaveLength(0)
+    expect(store.list()[0]?.state).toBe('done')
   })
 
   it('holds the job when cold wake declines or fails', async () => {
@@ -206,13 +206,91 @@ describe('CronScheduler', () => {
 
     expect(await scheduler.fireNow('cron-1')).toBe('fired')
     expect(target.followup).toHaveBeenCalledTimes(1)
-    expect(store.list()).toHaveLength(0)
+    expect(store.list()[0]?.state).toBe('done')
     expect(await scheduler.fireNow('cron-1')).toBe('not_found')
 
     scheduler.addJob({ prompt: 'held', at: '2026-08-16T09:00:00.000Z' })
     targets = []
     expect(await scheduler.fireNow('cron-2')).toBe('no_target')
+    // The done one-shot stays as history beside the held job.
+    expect(store.list()).toHaveLength(2)
+    expect(store.get('cron-2')?.state).toBe('active')
+  })
+
+  it('pauses and resumes jobs, recomputing the next occurrence', async () => {
+    const target = makeTarget('session-a', 'idle')
+    targets = [target]
+    const scheduler = makeScheduler()
+    scheduler.start()
+    scheduler.addJob({ prompt: 'daily', cron: '0 9 * * *' })
+
+    expect(scheduler.setPaused('cron-1', true)).toBe(true)
+    now = Date.parse('2026-08-16T10:00:00Z')
+    timerCallback?.()
+    await settle()
+    expect(target.followup).not.toHaveBeenCalled()
+
+    expect(scheduler.setPaused('cron-1', false)).toBe(true)
+    const job = store.get('cron-1')
+    expect(Date.parse(job?.nextAt ?? '')).toBeGreaterThan(now)
+
+    expect(scheduler.setPaused('missing', true)).toBe(false)
+    scheduler.setPaused('cron-1', true)
+    now = Date.parse('2026-08-17T10:00:00Z')
+    timerCallback?.()
+    await settle()
+    expect(store.get('cron-1')?.paused).toBe(true)
+  })
+
+  it('deduplicates identical active jobs and previews occurrences', () => {
+    const scheduler = makeScheduler()
+    scheduler.start()
+    const first = scheduler.addJob({ prompt: 'daily', cron: '0 9 * * 1-5', timeZone: 'UTC' })
+    expect(first.deduplicated).toBe(false)
+    expect(first.nextOccurrences).toEqual([
+      '2026-08-17T09:00:00.000Z',
+      '2026-08-18T09:00:00.000Z',
+      '2026-08-19T09:00:00.000Z',
+    ])
+
+    const second = scheduler.addJob({ prompt: 'daily', cron: '0 9 * * 1-5', timeZone: 'UTC' })
+    expect(second.deduplicated).toBe(true)
+    expect(second.job.id).toBe('cron-1')
     expect(store.list()).toHaveLength(1)
+  })
+
+  it('rejects at values without an explicit offset', () => {
+    const scheduler = makeScheduler()
+    scheduler.start()
+    expect(() => scheduler.addJob({ prompt: 'x', at: '2026-08-16T09:00:00' })).toThrow('invalid_selector')
+    expect(() => scheduler.addJob({ prompt: 'x', at: '2026-08-16 09:00' })).toThrow('invalid_selector')
+    const ok = scheduler.addJob({ prompt: 'x', at: '2026-08-16T09:00:00+08:00' })
+    expect(ok.job.nextAt).toBe('2026-08-16T01:00:00.000Z')
+  })
+
+  it('does not count done jobs toward the capacity limit', () => {
+    const target = makeTarget('session-a', 'idle')
+    targets = [target]
+    const scheduler = makeScheduler()
+    scheduler.start()
+    scheduler.addJob({ prompt: 'a', at: '2026-08-16T09:00:00.000Z' })
+    scheduler.addJob({ prompt: 'b', at: '2026-08-16T10:00:00.000Z' })
+    scheduler.addJob({ prompt: 'c', at: '2026-08-16T11:00:00.000Z' })
+    expect(() => scheduler.addJob({ prompt: 'd', at: '2026-08-16T12:00:00.000Z' })).toThrow('too_many_jobs')
+    // Firing one to done frees capacity.
+    return scheduler.fireNow('cron-1').then((result) => {
+      expect(result).toBe('fired')
+      expect(() => scheduler.addJob({ prompt: 'd', at: '2026-08-16T12:00:00.000Z' })).not.toThrow()
+    })
+  })
+
+  it('records run outcomes onto the job', () => {
+    const scheduler = makeScheduler()
+    scheduler.start()
+    scheduler.addJob({ prompt: 'daily', cron: '0 9 * * *' })
+    scheduler.recordRun('cron-1', { firedAt: '2026-08-15T09:00:00.000Z', completedAt: '2026-08-15T09:01:00.000Z', outcome: 'completed', excerpt: 'done' })
+    expect(store.get('cron-1')?.lastRun?.outcome).toBe('completed')
+    scheduler.recordRun('missing', { firedAt: '2026-08-15T09:00:00.000Z', outcome: 'timeout' })
   })
 
   it('enforces validation and capacity limits', () => {

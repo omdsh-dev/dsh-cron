@@ -23,6 +23,18 @@ export interface CronSchedule {
 /** Job schedule union persisted in the store. */
 export type JobSchedule = AtSchedule | CronSchedule
 
+/** The recorded outcome of one dispatch. */
+export interface CronRunRecord {
+  /** RFC 3339 UTC dispatch time. */
+  readonly firedAt: string
+  /** RFC 3339 UTC turn completion; absent while pending. */
+  readonly completedAt?: string
+  /** `delivered` while the turn runs; final states: completed/error/cancelled/timeout. */
+  readonly outcome: 'delivered' | 'completed' | 'error' | 'cancelled' | 'timeout'
+  /** Leading excerpt of the turn's assistant text (bounded). */
+  readonly excerpt?: string
+}
+
 /** One durable scheduled job. */
 export interface CronJob {
   /** Stable store-local id, never reused within one store file. */
@@ -40,6 +52,12 @@ export interface CronJob {
   lastFiredAt: string | null
   /** Number of completed dispatches. */
   fireCount: number
+  /** `done` one-shots stay in the store as history; they never fire again. */
+  state: 'active' | 'done'
+  /** Paused jobs are kept but excluded from dispatch. */
+  paused: boolean
+  /** The most recent dispatch outcome, or null. */
+  lastRun: CronRunRecord | null
 }
 
 const STORE_VERSION = 1
@@ -55,11 +73,23 @@ function isValidJob(value: unknown): value is CronJob {
   if (value.createdBy !== null && typeof value.createdBy !== 'string') return false
   if (value.lastFiredAt !== null && typeof value.lastFiredAt !== 'string') return false
   if (typeof value.fireCount !== 'number') return false
+  // Fields introduced after the first store version normalize on load.
+  if (value.state !== undefined && value.state !== 'active' && value.state !== 'done') return false
+  if (value.paused !== undefined && typeof value.paused !== 'boolean') return false
+  if (value.lastRun !== undefined && value.lastRun !== null && !isRecord(value.lastRun)) return false
   const schedule = value.schedule
   if (!isRecord(schedule)) return false
   if (schedule.kind === 'at') return typeof schedule.at === 'string'
   if (schedule.kind === 'cron') return typeof schedule.expression === 'string' && typeof schedule.timeZone === 'string'
   return false
+}
+
+/** Fill fields introduced after the first store version. */
+function normalizeJob(job: CronJob): CronJob {
+  job.state ??= 'active'
+  job.paused ??= false
+  job.lastRun ??= null
+  return job
 }
 
 /**
@@ -109,7 +139,7 @@ export class CronStore {
         continue
       }
       ids.add(entry.id)
-      jobs.push(entry)
+      jobs.push(normalizeJob(entry))
     }
     this.jobList = jobs
     this.seq = typeof parsed.seq === 'number' && Number.isSafeInteger(parsed.seq) ? parsed.seq : jobs.length

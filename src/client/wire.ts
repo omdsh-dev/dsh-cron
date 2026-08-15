@@ -16,6 +16,14 @@ export interface CronJobWire {
   readonly nextAt: string
   readonly lastFiredAt: string | null
   readonly fireCount: number
+  readonly state: 'active' | 'done'
+  readonly paused: boolean
+  readonly lastRun: {
+    readonly firedAt: string
+    readonly completedAt?: string
+    readonly outcome: 'delivered' | 'completed' | 'error' | 'cancelled' | 'timeout'
+    readonly excerpt?: string
+  } | null
 }
 
 /** Payload of the `list` endpoint. */
@@ -28,6 +36,13 @@ export interface CronListWire {
 export interface CronRemoveWire {
   readonly id: string
   readonly removed: boolean
+}
+
+/** Payload of the `update` endpoint. */
+export interface CronUpdateWire {
+  readonly id: string
+  readonly paused: boolean
+  readonly updated: boolean
 }
 
 /** Payload of the `fire` endpoint. */

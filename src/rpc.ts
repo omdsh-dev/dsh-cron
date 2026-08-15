@@ -34,6 +34,12 @@ export function registerCronRpc(ctx: Context, service: CronService): () => void 
       switch (endpoint) {
         case 'list': return ok({ jobs: service.list(), generatedAt: Date.now() })
         case 'remove': return ok({ id: payloadId(payload), removed: service.remove(payloadId(payload)) })
+        case 'update': {
+          const paused = (payload as { paused?: unknown } | undefined)?.paused
+          if (typeof paused !== 'boolean') throw new Error('dsh-cron RPC: payload.paused must be a boolean')
+          const id = payloadId(payload)
+          return ok({ id, paused, updated: service.setPaused(id, paused) })
+        }
         case 'fire': {
           const id = payloadId(payload)
           return ok({ id, result: await service.fireNow(id) })

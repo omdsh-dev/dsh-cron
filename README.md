@@ -27,8 +27,9 @@ dsh --profile web --dump-config
 
 Model-facing tools (registered globally, available in every agent):
 
-- `cron_add` — `prompt` plus exactly one selector: `cron` (five fields, optional `time_zone`) or `at` (one-shot RFC 3339 with offset).
-- `cron_list` — all jobs with ids, schedules, next fire times, and counters.
+- `cron_add` — `prompt` plus exactly one selector: `cron` (five fields, optional `time_zone`) or `at` (one-shot RFC 3339 with offset). Returns the job with its next three fire times; an identical active job is reused instead of duplicated.
+- `cron_list` — all jobs with ids, schedules, states, next fire times, and last run outcomes.
+- `cron_update` — pause or resume a job.
 - `cron_remove` — remove by id.
 
 Human command with the same store:
@@ -38,6 +39,8 @@ Human command with the same store:
 /cron add 0 9 * * 1-5 Summarize overnight CI results
 /cron add tz=Asia/Shanghai 0 9 * * 1-5 Prepare the morning standup
 /cron add-at 2026-08-20T09:00:00+08:00 Prepare the release checklist
+/cron pause cron-3
+/cron resume cron-3
 /cron remove cron-3
 ```
 
@@ -59,7 +62,11 @@ In the `web` profile, dsh-cron ships a browser half: a `⏰ Cron` action in the 
 
 When a job becomes due, dsh-cron picks a target among live root agents: the job's creating session when it is live, otherwise the first idle root, otherwise the first root. An idle target gets the task as a `followup()` turn immediately; a busy target queues it as its next turn, so the task always executes without interrupting running work. (`busyDelivery: 'inject'` instead rides the running turn as context — notification semantics, the task may not be acted on.) With no live root, the job waits overdue and fires when the next root agent appears (an overdue job is retried at most once a minute). Missed occurrences collapse to the latest one; backlogs are never replayed.
 
-Several dsh processes sharing one Harness home (for example `dsh web` plus a headless run) load this plugin in each process. A lock under the store directory elects one scheduler; other instances stay management-only (tools, command, and panel still work) until they are reloaded after the holder exits.
+Several dsh processes sharing one Harness home (for example `dsh web` plus a headless run) load this plugin in each process. A lock under the store directory elects one scheduler; other instances stay management-only (tools, command, and panel still work) and retake the lock within a minute of the holder exiting.
+
+## Execution feedback
+
+A fired one-shot becomes `done` and stays in the store as history instead of disappearing. Every follow-up delivery is tracked against the target session's event stream: when the turn settles, the job records `lastRun` with its outcome (`completed` / `error` / `cancelled` / `timeout`) and a bounded excerpt of the assistant's reply, visible in `cron_list`, `/cron list`, and the panel. Inject-mode deliveries (`busyDelivery: 'inject'`) open no turn and are not tracked.
 
 ### Cold-session wake
 
@@ -95,7 +102,7 @@ Jobs persist to `cron/jobs.json` inside the Harness home (override with the `dat
 
 - Cron fields are numeric only; `JAN`/`MON` style names are rejected.
 - Cold wake resumes only the job's creating session; if that session was deleted or cannot resume, the job falls back to the live-target path (or waits overdue when none is live).
-- A passive (non-lock-holding) instance does not take over scheduling until it is reloaded after the holder exits.
+- Outcome tracking watches one pending run per session; back-to-back fires into the same session supersede the earlier watch.
 - Fires are at-least-once within one host run: a crash between message enqueue and store flush can repeat a fire.
 
 ## Development

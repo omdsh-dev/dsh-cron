@@ -7,7 +7,7 @@
 import { useEffect, useState } from 'react'
 import type { ConnectionHandle } from '@deepseek-ai/dsh-client-connection/client'
 import { callRpc } from './rpc.ts'
-import type { CronFireWire, CronJobWire, CronListWire } from './wire.ts'
+import type { CronFireWire, CronJobWire, CronListWire, CronUpdateWire } from './wire.ts'
 
 const POLL_MS = 30_000
 
@@ -120,6 +120,17 @@ export function CronPanel(props: CronPanelProps) {
     }
   }
 
+  const togglePause = async (job: CronJobWire): Promise<void> => {
+    try {
+      const outcome = await callRpc<CronUpdateWire>(connection, 'update', { id: job.id, paused: !job.paused })
+      if (!outcome.updated) setError(`${job.id}: cannot update a finished or unknown job`)
+      const next = await callRpc<CronListWire>(connection, 'list')
+      setList(next)
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause))
+    }
+  }
+
   const jobs = list?.jobs ?? []
   return (
     <span style={styles.wrap}>
@@ -132,13 +143,25 @@ export function CronPanel(props: CronPanelProps) {
           {error !== null && <div style={{ color: 'var(--dsw-alias-label-danger, #e5534b)' }}>{error}</div>}
           {list !== null && jobs.length === 0 && <div style={styles.dim}>No scheduled jobs.</div>}
           {jobs.map(job => (
-            <div key={job.id} style={styles.job}>
-              <div>{truncate(job.prompt, 80)}</div>
-              <div style={styles.dim}>
-                {job.id} · {describeSchedule(job)} · next {job.nextAt} · fired {job.fireCount}x
-              </div>
+            <div key={job.id} style={{ ...styles.job, ...(job.state === 'done' ? styles.dim : {}) }}>
               <div>
-                <button type="button" style={styles.action} onClick={() => { void act('fire', job.id) }}>Run now</button>
+                {job.paused && '⏸ '}{job.state === 'done' ? '✓ ' : ''}{truncate(job.prompt, 80)}
+              </div>
+              <div style={styles.dim}>
+                {job.id} · {describeSchedule(job)} · {job.state === 'done' ? 'done' : job.paused ? 'paused' : `next ${job.nextAt}`} · fired {job.fireCount}x
+              </div>
+              {job.lastRun !== null && (
+                <div style={styles.dim}>
+                  last run {job.lastRun.outcome}{job.lastRun.excerpt !== undefined ? ` — ${truncate(job.lastRun.excerpt, 60)}` : ''}
+                </div>
+              )}
+              <div>
+                {job.state === 'active' && (
+                  <>
+                    <button type="button" style={styles.action} onClick={() => { void act('fire', job.id) }}>Run now</button>
+                    <button type="button" style={styles.action} onClick={() => { void togglePause(job) }}>{job.paused ? 'Resume' : 'Pause'}</button>
+                  </>
+                )}
                 <button type="button" style={styles.action} onClick={() => { void act('remove', job.id) }}>Delete</button>
               </div>
             </div>

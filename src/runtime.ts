@@ -14,6 +14,7 @@ import { resolveConfig, type Config, type ResolvedConfig } from './config.ts'
 import { acquireSchedulerLock } from './lock.ts'
 import { registerCronRpc } from './rpc.ts'
 import { CronScheduler, type CronTarget } from './scheduler.ts'
+import { createOutcomeTracker } from './tracking.ts'
 import { CronStore, type CronJob } from './store.ts'
 import { registerCronTools } from './tools.ts'
 
@@ -89,12 +90,19 @@ export function apply(ctx: Context, config: Config): void {
   const dataDir = resolved.dataDir ?? join(resolveDshHome(), 'cron')
   const store = new CronStore(join(dataDir, 'jobs.json'), message => runtime.warn(message))
   store.load()
+  const tracker = createOutcomeTracker(ctx, (jobId, run) => { scheduler.recordRun(jobId, run) })
   const scheduler = new CronScheduler({
     store,
     now: () => runtime.now(),
     targets: () => runtime.targets(),
     buildMessage: (job, scheduledAt) => runtime.buildMessage(job, scheduledAt),
     deliver: (target, message) => runtime.deliver(target, message),
+    onDispatched: (job, target) => {
+      // Only a followup opens a turn whose outcome can be observed.
+      if (target.status === 'idle' || resolved.busyDelivery === 'followup') {
+        tracker.track(job.id, target.id, new Date(Date.now()).toISOString())
+      }
+    },
     armTimer: (callback, delayMs) => {
       const timer = setTimeout(callback, delayMs)
       return () => { clearTimeout(timer) }
@@ -125,13 +133,27 @@ export function apply(ctx: Context, config: Config): void {
   })
   ctx.effect(() => {
     // Two dsh processes sharing one Harness home load this plugin twice; only
-    // the lock holder runs timers and dispatch, the rest stay management-only.
-    const lock = acquireSchedulerLock(dataDir, message => runtime.warn(message))
+    // the lock holder runs timers and dispatch. A passive instance retries the
+    // lock so it takes over when the holder exits.
+    let lock = acquireSchedulerLock(dataDir, message => runtime.warn(message))
+    let retry: ReturnType<typeof setInterval> | null = null
     if (lock.acquired) {
       scheduler.start()
       runtime.info(`dsh-cron: loaded ${store.list().length} job(s) from ${dataDir}`)
+    } else {
+      retry = setInterval(() => {
+        lock = acquireSchedulerLock(dataDir, message => runtime.warn(message))
+        if (lock.acquired) {
+          if (retry !== null) clearInterval(retry)
+          retry = null
+          store.load()
+          scheduler.start()
+          runtime.info(`dsh-cron: took over scheduling (${store.list().length} job(s))`)
+        }
+      }, 60_000)
     }
     return () => {
+      if (retry !== null) clearInterval(retry)
       scheduler.stop()
       lock.release()
     }

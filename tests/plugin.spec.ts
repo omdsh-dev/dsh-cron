@@ -30,7 +30,7 @@ describe('dsh-cron', () => {
 
   it('registers the three cron tools and unprovides the cron service on dispose', async () => {
     const harness = await createPluginHarness()
-    expect(harness.registered.map(tool => tool.name)).toEqual(['cron_add', 'cron_list', 'cron_remove'])
+    expect(harness.registered.map(tool => tool.name)).toEqual(['cron_add', 'cron_update', 'cron_list', 'cron_remove'])
     expect(harness.ctx.get('cron')).toBeDefined()
 
     await harness.dispose()
@@ -40,7 +40,10 @@ describe('dsh-cron', () => {
   it('adds, lists, and removes a one-shot job through the tools', async () => {
     const harness = await createPluginHarness()
     const tools = harness.registered as unknown as CapturedTool[]
-    const [add, list, remove] = tools as [CapturedTool, CapturedTool, CapturedTool]
+    const byName = new Map(tools.map(tool => [tool.name, tool]))
+    const add = byName.get('cron_add') as CapturedTool
+    const list = byName.get('cron_list') as CapturedTool
+    const remove = byName.get('cron_remove') as CapturedTool
 
     const added = await add.execute({ prompt: 'standup summary', at: futureAt() }, { agent: undefined }) as { id: string; nextAt: string }
     expect(added.id).toBe('cron-1')

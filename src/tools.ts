@@ -42,14 +42,14 @@ export function registerCronTools(ctx: Context, scheduler: CronScheduler): void 
     },
     execute: (args, exec) => {
       try {
-        const job = scheduler.addJob({
+        const result = scheduler.addJob({
           prompt: args.prompt,
           ...(args.cron !== undefined ? { cron: args.cron } : {}),
           ...(args.time_zone !== undefined ? { timeZone: args.time_zone } : {}),
           ...(args.at !== undefined ? { at: args.at } : {}),
           createdBy: exec.agent === undefined ? null : String(exec.agent.id),
         })
-        return Promise.resolve(job as unknown as JsonValue)
+        return Promise.resolve({ ...result.job, deduplicated: result.deduplicated, nextOccurrences: result.nextOccurrences } as unknown as JsonValue)
       } catch (error) {
         throw new Error(`cron_add: ${(error as Error).message}`)
       }
@@ -57,8 +57,35 @@ export function registerCronTools(ctx: Context, scheduler: CronScheduler): void 
   }))
 
   ctx.tools.register(defineTool({
+    name: 'cron_update',
+    description: 'Pause or resume a scheduled job. Paused jobs keep their schedule and statistics but do not fire; resuming a recurring job moves its next fire past now.',
+    parameters: {
+      id: {
+        type: 'string',
+        required: true,
+        description: 'Job id as returned by cron_add or cron_list, e.g. "cron-3".',
+      },
+      paused: {
+        type: 'boolean',
+        required: true,
+        description: 'true to pause, false to resume.',
+      },
+    },
+    output: {
+      schema: { type: 'json' } as const,
+      render: (_args, value) => [{ type: 'text', text: JSON.stringify(value, null, 2) }],
+    },
+    execute: (args) => {
+      const id = args.id.trim()
+      if (id.length === 0) throw new Error('cron_update: id must be non-blank')
+      const updated = scheduler.setPaused(id, args.paused)
+      return Promise.resolve({ id, paused: args.paused, updated } as JsonValue)
+    },
+  }))
+
+  ctx.tools.register(defineTool({
     name: 'cron_list',
-    description: 'List every scheduled job with its id, schedule, next fire time, and dispatch counters.',
+    description: 'List every scheduled job (including paused and finished one-shots) with its id, schedule, state, next fire time, and last run outcome.',
     parameters: {},
     output: {
       schema: { type: 'json' } as const,

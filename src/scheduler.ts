@@ -6,7 +6,7 @@
  */
 
 import { isValidTimeZone, nextOccurrence, parseCronExpression, type CronSpec } from './cron.ts'
-import type { CronJob, CronStore, JobSchedule } from './store.ts'
+import type { CronJob, CronRunRecord, CronStore, JobSchedule } from './store.ts'
 
 /** A live agent that can receive a scheduled task. */
 export interface CronTarget {
@@ -31,6 +31,15 @@ export interface AddJobInput {
   readonly createdBy?: string | null
 }
 
+/** Result of adding a job. */
+export interface AddJobResult {
+  readonly job: CronJob
+  /** True when an identical active job already existed; nothing was inserted. */
+  readonly deduplicated: boolean
+  /** The next fire times (up to three), RFC 3339 UTC. */
+  readonly nextOccurrences: readonly string[]
+}
+
 /** Host boundary injected into the scheduler. */
 export interface CronSchedulerOptions {
   readonly store: CronStore
@@ -42,6 +51,8 @@ export interface CronSchedulerOptions {
   buildMessage(job: CronJob, scheduledAt: string): unknown
   /** Deliver a built message to one target. */
   deliver(target: CronTarget, message: unknown): void
+  /** Called after each successful delivery so the host can track the turn. */
+  readonly onDispatched?: ((job: CronJob, target: CronTarget) => void) | undefined
   /** Arm a one-shot timer; the return value cancels it. */
   armTimer(callback: () => void, delayMs: number): () => void
   /**
@@ -59,13 +70,15 @@ export interface CronSchedulerOptions {
 /** Programmatic service published as `ctx.cron` for other plugins. */
 export interface CronService {
   /** Add a job; throws an `Error` prefixed with a stable reason code. */
-  add(input: AddJobInput): CronJob
+  add(input: AddJobInput): AddJobResult
   /** Remove a job by id. */
   remove(id: string): boolean
-  /** List all jobs. */
+  /** List all jobs, including done history. */
   list(): readonly CronJob[]
   /** Dispatch one job immediately, independent of its schedule. */
   fireNow(id: string): Promise<'fired' | 'not_found' | 'no_target'>
+  /** Pause or resume a job; returns false when unknown or already done. */
+  setPaused(id: string, paused: boolean): boolean
 }
 
 /** Largest delay accepted by a Node timer; longer waits are segmented. */
@@ -73,6 +86,9 @@ const MAX_TIMER_DELAY_MS = 2_147_483_647
 
 /** Re-check floor for overdue jobs that found no dispatch target. */
 const OVERDUE_RETRY_MS = 60_000
+
+/** Strict RFC 3339 with an explicit offset or Z; no local-time guessing. */
+const STRICT_AT = new RegExp('^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}(:\\d{2}(\\.\\d{1,3})?)?(Z|[+-]\\d{2}:\\d{2})$')
 
 /**
  * The cron scheduler. Durable state lives in the store; the timer and
@@ -93,6 +109,7 @@ export class CronScheduler {
       remove: id => this.removeJob(id),
       list: () => this.listJobs(),
       fireNow: id => this.fireNow(id),
+      setPaused: (id, paused) => this.setPaused(id, paused),
     }
   }
 
@@ -112,7 +129,7 @@ export class CronScheduler {
     this.requestFire()
   }
 
-  /** List jobs in insertion order. */
+  /** List jobs in insertion order, including done history. */
   listJobs(): readonly CronJob[] {
     return this.options.store.list()
   }
@@ -120,21 +137,18 @@ export class CronScheduler {
   /**
    * Validate and persist a new job.
    * @param input - the schedule request.
-   * @returns the durable job.
+   * @returns the job with dedupe and preview metadata.
    * @throws {Error} with a stable reason code prefix (`invalid_prompt`,
    *   `invalid_selector`, `invalid_cron_expression`, `invalid_time_zone`,
    *   `not_future`, `too_frequent`, `too_many_jobs`, `schedule_unreachable`).
    */
-  addJob(input: AddJobInput): CronJob {
+  addJob(input: AddJobInput): AddJobResult {
     const { store } = this.options
     const prompt = input.prompt.trim()
     if (prompt.length === 0) throw new Error('invalid_prompt: prompt must be non-blank')
     const hasCron = typeof input.cron === 'string' && input.cron.trim().length > 0
     const hasAt = typeof input.at === 'string' && input.at.trim().length > 0
     if (hasCron === hasAt) throw new Error('invalid_selector: exactly one of cron or at is required')
-    if (store.list().length >= this.options.maxJobs) {
-      throw new Error(`too_many_jobs: at most ${this.options.maxJobs} jobs are allowed`)
-    }
     const now = this.options.now()
     let schedule: JobSchedule
     let nextAtMs: number
@@ -154,11 +168,27 @@ export class CronScheduler {
       nextAtMs = first
     } else {
       const at = (input.at as string).trim()
+      if (!STRICT_AT.test(at)) {
+        throw new Error(`invalid_selector: at must be RFC 3339 with an explicit offset or Z, got "${at}"`)
+      }
       const atMs = Date.parse(at)
       if (Number.isNaN(atMs)) throw new Error(`invalid_selector: unparseable RFC 3339 time "${at}"`)
       if (atMs <= now) throw new Error('not_future: at must be in the future')
       schedule = { kind: 'at', at: new Date(atMs).toISOString() }
       nextAtMs = atMs
+    }
+
+    // An identical live job (same prompt and schedule) is reused, not duplicated.
+    const scheduleJson = JSON.stringify(schedule)
+    const duplicate = store.list().find(job =>
+      job.state === 'active' && job.prompt === prompt && JSON.stringify(job.schedule) === scheduleJson)
+    if (duplicate !== undefined) {
+      return { job: duplicate, deduplicated: true, nextOccurrences: this.preview(duplicate, 3) }
+    }
+
+    const active = store.list().filter(job => job.state === 'active').length
+    if (active >= this.options.maxJobs) {
+      throw new Error(`too_many_jobs: at most ${this.options.maxJobs} active jobs are allowed`)
     }
     const job: CronJob = {
       id: store.allocateId(),
@@ -169,11 +199,14 @@ export class CronScheduler {
       nextAt: new Date(nextAtMs).toISOString(),
       lastFiredAt: null,
       fireCount: 0,
+      state: 'active',
+      paused: false,
+      lastRun: null,
     }
     store.insert(job)
     if (spec !== null) this.specs.set(job.id, spec)
     this.arm()
-    return job
+    return { job, deduplicated: false, nextOccurrences: this.preview(job, 3) }
   }
 
   /** Remove a job by id; returns false when unknown. */
@@ -187,16 +220,67 @@ export class CronScheduler {
   }
 
   /**
+   * Pause or resume a job. Resuming a recurring job moves its next fire past
+   * now (no catch-up); resuming an overdue one-shot fires it on the next pass.
+   * @returns false when the job is unknown or already done.
+   */
+  setPaused(id: string, paused: boolean): boolean {
+    const job = this.options.store.get(id)
+    if (job === undefined || job.state === 'done') return false
+    if (job.paused === paused) return true
+    job.paused = paused
+    if (!paused && job.schedule.kind === 'cron') {
+      const spec = this.specFor(job)
+      const next = spec === null ? null : nextOccurrence(spec, this.options.now(), job.schedule.timeZone)
+      if (next === null) {
+        job.state = 'done'
+      } else {
+        job.nextAt = new Date(next).toISOString()
+      }
+    }
+    this.options.store.flush()
+    this.arm()
+    return true
+  }
+
+  /**
    * Dispatch one job immediately through the ordinary delivery path. A fired
-   * one-shot is removed; a recurring job advances to its next occurrence.
+   * one-shot becomes done; a recurring job advances to its next occurrence.
    */
   async fireNow(id: string): Promise<'fired' | 'not_found' | 'no_target'> {
     const job = this.options.store.get(id)
-    if (job === undefined) return 'not_found'
+    if (job === undefined || job.state === 'done') return 'not_found'
     const result = await this.dispatchJob(job, this.options.now())
     this.options.store.flush()
     this.arm()
     return result
+  }
+
+  /** Record the settled outcome of one dispatch; unknown jobs are dropped. */
+  recordRun(id: string, run: CronRunRecord): void {
+    const job = this.options.store.get(id)
+    if (job === undefined) return
+    job.lastRun = run
+    this.options.store.flush()
+  }
+
+  /** The next fire times of a job, for previews. */
+  private preview(job: CronJob, count: number): readonly string[] {
+    const times: string[] = []
+    if (job.schedule.kind === 'at') {
+      if (job.state === 'active') times.push(job.nextAt)
+      return times
+    }
+    const spec = this.specFor(job)
+    if (spec === null) return times
+    let cursor = Date.parse(job.nextAt) - 1
+    for (let index = 0; index < count; index++) {
+      const next = nextOccurrence(spec, cursor, job.schedule.timeZone)
+      if (next === null) break
+      times.push(new Date(next).toISOString())
+      cursor = next
+    }
+    return times
   }
 
   private specFor(job: CronJob): CronSpec | null {
@@ -208,11 +292,19 @@ export class CronScheduler {
     return spec
   }
 
+  /** Jobs eligible for dispatch right now. */
+  private dueJobs(now: number): CronJob[] {
+    return this.options.store.list()
+      .filter(job => job.state === 'active' && !job.paused && Date.parse(job.nextAt) <= now)
+      .sort((a, b) => Date.parse(a.nextAt) - Date.parse(b.nextAt))
+  }
+
   private arm(): void {
     this.cancelTimer?.()
     this.cancelTimer = null
     let earliest: number | null = null
     for (const job of this.options.store.list()) {
+      if (job.state !== 'active' || job.paused) continue
       const at = Date.parse(job.nextAt)
       if (earliest === null || at < earliest) earliest = at
     }
@@ -261,15 +353,12 @@ export class CronScheduler {
   }
 
   private async runFireDue(): Promise<void> {
-    const { store } = this.options
     const now = this.options.now()
-    const due = store.list()
-      .filter(job => Date.parse(job.nextAt) <= now)
-      .sort((a, b) => Date.parse(a.nextAt) - Date.parse(b.nextAt))
+    const due = this.dueJobs(now)
     for (const job of due) {
       await this.dispatchJob(job, now)
     }
-    if (due.length > 0) store.flush()
+    if (due.length > 0) this.options.store.flush()
   }
 
   /**
@@ -277,7 +366,6 @@ export class CronScheduler {
    * retire the schedule. Returns the outcome for direct callers.
    */
   private async dispatchJob(job: CronJob, now: number): Promise<'fired' | 'no_target'> {
-    const { store } = this.options
     let target = this.pickTarget(job)
     if (target === undefined && this.options.wakeCold !== undefined && job.createdBy !== null) {
       try {
@@ -298,8 +386,10 @@ export class CronScheduler {
     }
     job.lastFiredAt = new Date(now).toISOString()
     job.fireCount += 1
+    this.options.onDispatched?.(job, target)
     if (job.schedule.kind === 'at') {
-      store.remove(job.id)
+      // One-shots stay in the store as done history so their last run remains visible.
+      job.state = 'done'
       this.specs.delete(job.id)
       return 'fired'
     }
@@ -307,7 +397,7 @@ export class CronScheduler {
     // Latest-only catch-up: missed occurrences are collapsed, never replayed.
     const next = spec === null ? null : nextOccurrence(spec, now, job.schedule.timeZone)
     if (next === null) {
-      store.remove(job.id)
+      job.state = 'done'
       this.specs.delete(job.id)
     } else {
       job.nextAt = new Date(next).toISOString()
