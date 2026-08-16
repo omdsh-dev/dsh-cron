@@ -97,7 +97,7 @@ describe('CronStore', () => {
     const onReload = vi.fn()
     const reader = new CronStore(file, () => {})
     reader.load()
-    const dispose = reader.watch(onReload)
+    const dispose = reader.watch(onReload, 50)
     try {
       const writer = new CronStore(file, () => {})
       writer.load()
@@ -113,7 +113,7 @@ describe('CronStore', () => {
     const onReload = vi.fn()
     const store = new CronStore(file, () => {})
     store.load()
-    const dispose = store.watch(onReload)
+    const dispose = store.watch(onReload, 50)
     try {
       store.insert(makeJob(store.allocateId()))
       await new Promise(resolve => setTimeout(resolve, 250))
@@ -128,7 +128,7 @@ describe('CronStore', () => {
     const onReload = vi.fn()
     const reader = new CronStore(file, () => {})
     reader.load()
-    const dispose = reader.watch(onReload)
+    const dispose = reader.watch(onReload, 50)
     dispose()
 
     const writer = new CronStore(file, () => {})
@@ -144,7 +144,7 @@ describe('CronStore', () => {
     const reader = new CronStore(file, warn)
     reader.load()
     reader.insert(makeJob(reader.allocateId()))
-    const dispose = reader.watch()
+    const dispose = reader.watch(undefined, 50)
     try {
       writeFileSync(file, 'not json')
       await new Promise(resolve => setTimeout(resolve, 250))
