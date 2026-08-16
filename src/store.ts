@@ -4,8 +4,8 @@
  * @module dsh-cron/store
  */
 
-import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
-import { dirname } from 'node:path'
+import { mkdirSync, readFileSync, renameSync, watch as fsWatch, writeFileSync, type FSWatcher } from 'node:fs'
+import { basename, dirname } from 'node:path'
 
 /** One-shot absolute schedule, RFC 3339 UTC. */
 export interface AtSchedule {
@@ -100,6 +100,9 @@ function normalizeJob(job: CronJob): CronJob {
 export class CronStore {
   private seq = 0
   private jobList: CronJob[] = []
+  private watcher: FSWatcher | null = null
+  private debounce: ReturnType<typeof setTimeout> | null = null
+  private lastWritten: string | null = null
 
   /**
    * @param filePath - absolute path of the JSON store file.
@@ -119,6 +122,16 @@ export class CronStore {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') return
       throw error
     }
+    this.lastWritten = raw
+    this.applyRaw(raw, false)
+  }
+
+  /**
+   * Replace the in-memory projection with the given file content. Hot reloads
+   * (external writes from another process sharing this store) degrade to a
+   * warning on an unsupported format instead of failing the host boot.
+   */
+  private applyRaw(raw: string, hot: boolean): void {
     let parsed: unknown
     try {
       parsed = JSON.parse(raw)
@@ -129,6 +142,10 @@ export class CronStore {
       return
     }
     if (!isRecord(parsed) || parsed.version !== STORE_VERSION || !Array.isArray(parsed.jobs)) {
+      if (hot) {
+        this.warn(`dsh-cron: unsupported job store format in ${this.filePath}; keeping current state`)
+        return
+      }
       throw new Error(`dsh-cron: unsupported job store format in ${this.filePath}`)
     }
     const jobs: CronJob[] = []
@@ -181,11 +198,72 @@ export class CronStore {
     this.persist()
   }
 
+  /**
+   * Watch the store file for external changes (another dsh process sharing
+   * this Harness home) and hot-reload the in-memory projection. Self-writes
+   * are recognized by content equality and skipped. Returns a disposer.
+   * @param onReload - called once per applied external reload.
+   */
+  watch(onReload?: (jobs: number) => void): () => void {
+    if (this.watcher !== null) return () => {}
+    mkdirSync(dirname(this.filePath), { recursive: true })
+    const directory = dirname(this.filePath)
+    const name = basename(this.filePath)
+    const schedule = () => {
+      if (this.debounce !== null) clearTimeout(this.debounce)
+      this.debounce = setTimeout(() => {
+        this.debounce = null
+        if (this.reloadIfChanged() && onReload !== undefined) onReload(this.jobList.length)
+      }, 120)
+    }
+    const watcher = fsWatch(directory, (_eventType, filename) => {
+      if (String(filename) !== name && !String(filename).endsWith(`/${name}`)) return
+      schedule()
+    })
+    watcher.on('error', error => {
+      this.warn(`dsh-cron: job store watch failed: ${String(error)}`)
+      this.stopWatch()
+    })
+    this.watcher = watcher
+    return () => this.stopWatch()
+  }
+
+  /** Whether the file changed since our last write; reloads when it did. */
+  private reloadIfChanged(): boolean {
+    if (this.watcher === null) return false
+    let raw: string
+    try {
+      raw = readFileSync(this.filePath, 'utf8')
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+        this.warn(`dsh-cron: job store watch read failed: ${String(error)}`)
+      }
+      return false
+    }
+    if (raw === this.lastWritten) return false
+    this.lastWritten = raw
+    this.applyRaw(raw, true)
+    return true
+  }
+
+  private stopWatch(): void {
+    if (this.debounce !== null) {
+      clearTimeout(this.debounce)
+      this.debounce = null
+    }
+    if (this.watcher !== null) {
+      this.watcher.close()
+      this.watcher = null
+    }
+  }
+
   private persist(): void {
     mkdirSync(dirname(this.filePath), { recursive: true })
     const payload = JSON.stringify({ version: STORE_VERSION, seq: this.seq, jobs: this.jobList }, null, 2)
+    const content = `${payload}\n`
+    this.lastWritten = content
     const temporary = `${this.filePath}.tmp-${process.pid}`
-    writeFileSync(temporary, `${payload}\n`)
+    writeFileSync(temporary, content)
     renameSync(temporary, this.filePath)
   }
 }

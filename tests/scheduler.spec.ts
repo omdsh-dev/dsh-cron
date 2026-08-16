@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { CronScheduler, type CronTarget } from '../src/scheduler.ts'
-import { CronStore } from '../src/store.ts'
+import { CronStore, type CronJob } from '../src/store.ts'
 
 function makeTarget(id: string, status: string) {
   return {
@@ -11,6 +11,23 @@ function makeTarget(id: string, status: string) {
     status,
     followup: vi.fn<(message: unknown) => void>(),
     inject: vi.fn<(message: unknown) => void>(),
+  }
+}
+
+/** A job due at 09:00Z, as an external writer would persist it. */
+function makeJobForStore(): CronJob {
+  return {
+    id: 'cron-1',
+    prompt: 'once',
+    schedule: { kind: 'at', at: '2026-08-15T09:00:00.000Z' },
+    createdBy: 'session-a',
+    createdAt: '2026-08-15T08:00:00.000Z',
+    nextAt: '2026-08-15T09:00:00.000Z',
+    lastFiredAt: null,
+    fireCount: 0,
+    state: 'active',
+    paused: false,
+    lastRun: null,
   }
 }
 
@@ -90,6 +107,30 @@ describe('CronScheduler', () => {
     expect(delivered[0]?.message).toMatchObject({ job: result.job.id, scheduledAt: '2026-08-15T09:00:00.000Z' })
     // A fired one-shot stays as done history.
     expect(store.list()[0]?.state).toBe('done')
+  })
+
+  it('re-arms dispatch when the store gains a job after start (hot reload)', async () => {
+    const owner = makeTarget('session-a', 'idle')
+    targets = [owner]
+    const scheduler = makeScheduler()
+    scheduler.start()
+    expect(timerCallback).toBeNull()
+
+    const writer = new CronStore(join(dir, 'jobs.json'), () => {})
+    writer.load()
+    const job = makeJobForStore()
+    writer.insert(job)
+    expect(job.id).toBe('cron-1')
+    store.load()
+
+    scheduler.storeChanged()
+    await settle()
+    expect(timerDelay).toBe(3_600_000)
+
+    now = Date.parse('2026-08-15T09:00:01Z')
+    timerCallback?.()
+    await settle()
+    expect(delivered[0]?.message).toMatchObject({ job: 'cron-1', scheduledAt: '2026-08-15T09:00:00.000Z' })
   })
 
   it('injects instead of interrupting a busy target', async () => {

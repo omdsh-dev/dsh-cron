@@ -181,6 +181,10 @@ export function apply(ctx: Context, config: Config): void {
   ctx.provide('cron', scheduler.service())
   ctx.on('agent/created', () => { scheduler.notifyTargets() })
   registerCronTools(ctx, scheduler)
+  ctx.effect(() => store.watch(jobs => {
+    runtime.info(`dsh-cron: job store reloaded (${jobs} job(s))`)
+    scheduler.storeChanged()
+  }), 'dsh-cron: store watch')
   ctx.inject(['commands'], (commandCtx) => {
     commandCtx.effect(() => registerCronCommand(commandCtx, scheduler), 'dsh-cron: command')
   })

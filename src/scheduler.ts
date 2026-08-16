@@ -98,6 +98,7 @@ export class CronScheduler {
   private cancelTimer: (() => void) | null = null
   private firing = false
   private pendingFire = false
+  private running = false
   private readonly specs = new Map<string, CronSpec>()
 
   constructor(private readonly options: CronSchedulerOptions) {}
@@ -115,13 +116,25 @@ export class CronScheduler {
 
   /** Arm the timer and dispatch anything already due. */
   start(): void {
+    this.running = true
     this.requestFire()
   }
 
   /** Cancel the timer; durable jobs are untouched. */
   stop(): void {
+    this.running = false
     this.cancelTimer?.()
     this.cancelTimer = null
+  }
+
+  /**
+   * Reconsider dispatch after the store gained or lost jobs through a hot
+   * reload: the timer is armed from the job list, so a store change without a
+   * local mutation would otherwise leave the scheduler asleep. No-op while not
+   * running, so passive instances never double-dispatch.
+   */
+  storeChanged(): void {
+    if (this.running) this.requestFire()
   }
 
   /** Re-check due jobs, e.g. when a new live target appears. */

@@ -92,4 +92,71 @@ describe('CronStore', () => {
     reloaded.load()
     expect(reloaded.list()).toEqual([])
   })
+
+  it('hot-reloads jobs written by another process sharing the file', async () => {
+    const onReload = vi.fn()
+    const reader = new CronStore(file, () => {})
+    reader.load()
+    const dispose = reader.watch(onReload)
+    try {
+      const writer = new CronStore(file, () => {})
+      writer.load()
+      writer.insert(makeJob(writer.allocateId()))
+      await vi.waitFor(() => expect(reader.list().map(job => job.id)).toEqual(['cron-1']))
+      expect(onReload).toHaveBeenCalledWith(1)
+    } finally {
+      dispose()
+    }
+  })
+
+  it('skips its own writes: no reload fires for local mutations', async () => {
+    const onReload = vi.fn()
+    const store = new CronStore(file, () => {})
+    store.load()
+    const dispose = store.watch(onReload)
+    try {
+      store.insert(makeJob(store.allocateId()))
+      await new Promise(resolve => setTimeout(resolve, 250))
+      expect(store.list().map(job => job.id)).toEqual(['cron-1'])
+      expect(onReload).not.toHaveBeenCalled()
+    } finally {
+      dispose()
+    }
+  })
+
+  it('stops watching after dispose', async () => {
+    const onReload = vi.fn()
+    const reader = new CronStore(file, () => {})
+    reader.load()
+    const dispose = reader.watch(onReload)
+    dispose()
+
+    const writer = new CronStore(file, () => {})
+    writer.load()
+    writer.insert(makeJob(writer.allocateId()))
+    await new Promise(resolve => setTimeout(resolve, 250))
+    expect(reader.list()).toEqual([])
+    expect(onReload).not.toHaveBeenCalled()
+  })
+
+  it('keeps current state when an external write is corrupt or unsupported', async () => {
+    const warn = vi.fn()
+    const reader = new CronStore(file, warn)
+    reader.load()
+    reader.insert(makeJob(reader.allocateId()))
+    const dispose = reader.watch()
+    try {
+      writeFileSync(file, 'not json')
+      await new Promise(resolve => setTimeout(resolve, 250))
+      expect(reader.list().map(job => job.id)).toEqual(['cron-1'])
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('corrupt'))
+
+      writeFileSync(file, JSON.stringify({ version: 99, jobs: [] }))
+      await new Promise(resolve => setTimeout(resolve, 250))
+      expect(reader.list().map(job => job.id)).toEqual(['cron-1'])
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('unsupported job store format'))
+    } finally {
+      dispose()
+    }
+  })
 })

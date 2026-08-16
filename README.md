@@ -81,7 +81,7 @@ In the `web` profile, a `⏰ Cron` action in the sidebar footer opens a panel wi
 
 A due job targets its creating session when live, else the first idle root agent, else the first root. An idle target runs the task as a `followup()` turn immediately; a busy target queues it as its next turn, so the task always executes without interrupting running work (`busyDelivery: 'inject'` switches to notification semantics). With no live root the job waits overdue, retrying at most once a minute, and fires when the next root appears. Missed occurrences collapse to the latest one.
 
-Several dsh processes sharing one Harness home elect one scheduler through a lock file; the rest stay management-only and retake the lock within a minute of the holder exiting.
+Several dsh processes sharing one Harness home elect one scheduler through a lock file; the rest stay management-only and retake the lock within a minute of the holder exiting. `jobs.json` is file-watched (self-writes are recognized and skipped), so jobs added by another process are picked up live — a job registered in a headless run fires from a running `dsh web` without a restart.
 
 ### Cold-session wake
 
