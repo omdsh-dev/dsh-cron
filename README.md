@@ -98,6 +98,10 @@ scheduled_at: "2026-08-17T09:00:00.000Z"
 task_prompt_json: "Summarize overnight CI results"
 ```
 
+### Outbound callbacks
+
+When `dsh-webhook` (≥ 0.2) is mounted in the same host, settled runs that did not deliver (`completed` / `error` / `cancelled` / `timeout`) are forwarded to its outbound callback rules as a `cron`-source event — HTTP POST or macOS notification, same as webhook delivery settles. dsh-cron never depends on webhook: without it, settled runs are simply recorded as usual. Integration uses a global `cron/settled` event plus an optional service fiber, so cron degrades silently when webhook is absent.
+
 ## Configuration
 
 | Key | Default | Meaning |

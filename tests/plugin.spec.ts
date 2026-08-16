@@ -1,7 +1,10 @@
-import { readFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
+import { tmpdir } from 'node:os'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
-import { describe, expect, it } from 'vitest'
+import { Context } from '@deepseek-ai/cordis'
+import type { ToolDefinition } from '@deepseek-ai/dsh-tools'
+import { describe, expect, it, vi } from 'vitest'
 import * as plugin from '../src/index.ts'
 import { createPluginHarness } from './harness.ts'
 
@@ -64,6 +67,38 @@ describe('dsh-cron', () => {
 
   it('fails loud when coldWake is enabled without session persistence', async () => {
     await expect(createPluginHarness({ coldWake: true })).rejects.toThrow('coldWake requires the sessionPersistence service')
+  })
+
+  it('forwards settled runs to the optional callbacks service when present', async () => {
+    const ctx = new Context()
+    const dataDir = mkdtempSync(join(tmpdir(), 'dsh-cron-cb-'))
+    const registered: ToolDefinition[] = []
+    const emitted: Array<Record<string, unknown>> = []
+    ctx.provide('tools', {
+      register: (definition: ToolDefinition) => { registered.push(definition); return () => {} },
+    })
+    ctx.provide('agents', {
+      roots: () => [{ id: 'agent-1', status: 'idle', followup: () => {}, inject: () => {} }],
+      list: () => [],
+      get: () => undefined,
+    })
+    ctx.provide('callbacks', {
+      emit: (event: Record<string, unknown>) => { emitted.push(event) },
+    })
+    const fiber = await ctx.plugin(plugin, { dataDir })
+    const rootSettled: unknown[] = []
+    ctx.on('cron/settled', event => { rootSettled.push(event) })
+    const service = ctx.get('cron') as { add(input: unknown): { job: { id: string } }; fireNow(id: string): Promise<string> }
+    const added = service.add({ prompt: 'x', at: futureAt(), timeZone: 'UTC' })
+    const fired = await service.fireNow(added.job.id)
+    expect(fired).toBe('fired')
+    ;(ctx as unknown as { emit(name: string, session: unknown, event: unknown): void })
+      .emit('session/event', { id: 'agent-1' }, { type: 'turn/end', data: { turn: 1, reason: { kind: 'completed' } } })
+    await vi.waitFor(() => expect(rootSettled).toHaveLength(1))
+    await vi.waitFor(() => expect(emitted).toHaveLength(1))
+    expect(emitted[0]).toMatchObject({ source: 'cron', jobId: added.job.id, outcome: 'completed', firedAt: expect.any(String) })
+    await fiber.dispose()
+    rmSync(dataDir, { recursive: true, force: true })
   })
 
   it('rejects invalid schedules with tool-prefixed errors', async () => {

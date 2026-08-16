@@ -77,6 +77,42 @@ export function createPluginRuntime(ctx: Context, config: ResolvedConfig): Plugi
 }
 
 /**
+ * Optional outbound callbacks service provided by dsh-webhook. dsh-cron never
+ * depends on it: the core only emits a `cron/settled` event, and a dependent
+ * fiber (activated only while a `callbacks` service exists) forwards settled
+ * runs to it, so cron degrades silently when webhook is absent.
+ */
+interface OutboundCallbacks {
+  emit(event: {
+    readonly source: 'cron'
+    readonly subject: string
+    readonly outcome?: string
+    readonly excerpt?: string
+    readonly jobId?: string
+    readonly firedAt?: string
+    readonly completedAt?: string
+  }): void
+}
+
+/** Payload of the `cron/settled` event (runs only fire when settled). */
+export interface CronSettledEvent {
+  readonly jobId: string
+  readonly run: {
+    readonly firedAt: string
+    readonly completedAt?: string
+    readonly outcome: 'delivered' | 'completed' | 'error' | 'cancelled' | 'timeout'
+    readonly excerpt?: string
+  }
+}
+
+declare module '@deepseek-ai/cordis' {
+  interface Events {
+    /** A job run settled to a final outcome (not `delivered`). */
+    'cron/settled'(event: CronSettledEvent): void
+  }
+}
+
+/**
  * Apply the plugin to its Cordis context.
  * @param ctx - Scoped plugin context; registrations must be owned by its effects.
  * @param config - Configuration resolved by Cordis from the exported schema.
@@ -90,7 +126,28 @@ export function apply(ctx: Context, config: Config): void {
   const dataDir = resolved.dataDir ?? join(resolveDshHome(), 'cron')
   const store = new CronStore(join(dataDir, 'jobs.json'), message => runtime.warn(message))
   store.load()
-  const tracker = createOutcomeTracker(ctx, (jobId, run) => { scheduler.recordRun(jobId, run) })
+  const tracker = createOutcomeTracker(ctx, (jobId, run) => {
+    scheduler.recordRun(jobId, run)
+    if (run.outcome !== 'delivered') ctx.emit('cron/settled', { jobId, run } satisfies CronSettledEvent)
+  })
+  ctx.inject(['callbacks'], (callbacksCtx) => {
+    callbacksCtx.effect(() => {
+      const off = callbacksCtx.on('cron/settled', (event: CronSettledEvent) => {
+        const callbacks = callbacksCtx.get('callbacks') as OutboundCallbacks | undefined
+        if (callbacks === undefined) return
+        callbacks.emit({
+          source: 'cron',
+          subject: `${event.jobId} · ${event.run.outcome}`,
+          outcome: event.run.outcome,
+          ...(event.run.excerpt === undefined ? {} : { excerpt: event.run.excerpt }),
+          jobId: event.jobId,
+          firedAt: event.run.firedAt,
+          ...(event.run.completedAt === undefined ? {} : { completedAt: event.run.completedAt }),
+        })
+      })
+      return off
+    }, 'dsh-cron: callbacks')
+  })
   const scheduler = new CronScheduler({
     store,
     now: () => runtime.now(),
