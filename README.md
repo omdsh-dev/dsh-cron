@@ -135,4 +135,4 @@ pnpm run prepare
 
 ## License
 
-MIT; see `LICENSE`.
+[MIT](LICENSE).

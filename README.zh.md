@@ -131,4 +131,4 @@ pnpm run prepare
 
 ## 许可证
 
-MIT，见 `LICENSE`。
+[MIT 许可证](LICENSE)。
