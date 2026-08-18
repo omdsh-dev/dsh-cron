@@ -1,0 +1,192 @@
+/* Cron sidebar footer panel. All colors come from the dsh design tokens
+ * (--dsw-alias-*), mirroring the shell's own chrome: the trigger row copies
+ * the settings seat geometry (42px bar / 36px rail circle, 12px radius,
+ * interactive-bg-hover), the panel copies the core popover chrome
+ * (ui-jobs menu: 336px, --dsw-specific-menu surface, shadow-lv3). */
+
+.wrap {
+  position: relative;
+  display: flex;
+  width: 100%;
+}
+
+/* Rail seat: the wrap hugs the 36px control so the panel anchors on it. */
+.rail {
+  width: auto;
+}
+
+.trigger {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: calc(100% + 4px);
+  height: 42px;
+  margin: 4px -2px;
+  padding: 0 10px 0 8px;
+  box-sizing: border-box;
+  border: none;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 22px;
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.trigger:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+/* Rail trigger: the same 36x36 circle box as the other rail controls. */
+.rail .trigger {
+  width: 36px;
+  height: 36px;
+  margin: 8px 0 10px;
+  justify-content: center;
+  gap: 0;
+  padding: 0;
+  border-radius: 50%;
+}
+
+/* Popover layer (ui-jobs menu chrome). Fixed, not absolute: the AppFrame
+   grid tracks clip overflow, so an absolutely positioned panel would be cut
+   at the sidebar column's right edge. Coordinates arrive from the trigger
+   rect (inline style) at open time. */
+.panel {
+  position: fixed;
+  z-index: 100;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  width: 336px;
+  max-width: min(400px, calc(100vw - 32px));
+  max-height: min(420px, calc(100vh - 140px));
+  padding: 4px;
+  overflow: auto;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 12px;
+  background: var(--dsw-specific-menu);
+  color: var(--dsw-alias-label-primary);
+  box-shadow: var(--dsw-shadow-lv3);
+  --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
+  --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 6px 8px;
+  color: var(--dsw-alias-label-primary);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 18px;
+}
+
+.empty {
+  padding: 16px 8px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 13px;
+  line-height: 18px;
+  text-align: center;
+}
+
+.error {
+  margin: 2px 0;
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: var(--dsw-alias-interactive-bg-hover-danger);
+  color: var(--dsw-alias-state-error-primary);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+/* One job: row hover matches the sidebar list rows. */
+.job {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  box-sizing: border-box;
+  width: 100%;
+  padding: 6px 8px;
+  border-radius: 8px;
+}
+
+.job:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.title {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--dsw-alias-label-primary);
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.done .title {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.stateIcon {
+  flex: none;
+  display: inline-flex;
+}
+
+.meta {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.schedule {
+  font-family: var(--dsw-font-mono);
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  padding-top: 2px;
+}
+
+.action {
+  border: none;
+  background: transparent;
+  margin: 0 -4px;
+  padding: 0 4px;
+  border-radius: 5px;
+  color: var(--dsw-alias-label-tertiary);
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 18px;
+  cursor: pointer;
+}
+
+.action:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
+}
+
+.actionDanger {
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.actionDanger:hover {
+  background: var(--dsw-alias-interactive-bg-hover-danger);
+  color: var(--dsw-alias-state-error-primary);
+}

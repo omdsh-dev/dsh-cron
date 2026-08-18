@@ -4,77 +4,41 @@
  * @module
  */
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { ConnectionHandle } from '@deepseek-ai/dsh-client-connection/client'
+import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
+import css from './CronPanel.module.css'
+import { IconCheckOutline14, IconClockOutline16, IconPauseOutline16 } from './icons.tsx'
 import { callRpc } from './rpc.ts'
 import type { CronFireWire, CronJobWire, CronListWire, CronUpdateWire } from './wire.ts'
 
 const POLL_MS = 30_000
 
-export interface CronPanelProps {
+export interface CronPanelProps extends PropsLocale<'sidebar.cron'> {
   /** Owner prop of the `sidebar.footer.action` slot. */
   readonly wide: boolean
   /** Injected connection face. */
   readonly connection: ConnectionHandle
 }
 
-function describeSchedule(job: CronJobWire): string {
-  if (job.schedule.kind === 'at') return `once at ${job.schedule.at}`
-  return `${job.schedule.expression} (${job.schedule.timeZone})`
+function describeSchedule(job: CronJobWire, t: CronPanelProps['t']): string {
+  if (job.schedule.kind === 'at') return t('scheduleAt', { at: job.schedule.at })
+  return t('scheduleExpr', { expression: job.schedule.expression, timeZone: job.schedule.timeZone })
 }
 
 function truncate(text: string, max: number): string {
   return text.length <= max ? text : `${text.slice(0, max - 1)}…`
 }
 
-const styles = {
-  wrap: { position: 'relative', display: 'inline-flex' } as const,
-  button: {
-    cursor: 'pointer',
-    border: 'none',
-    background: 'transparent',
-    color: 'var(--dsw-alias-label-secondary, inherit)',
-    fontSize: 12,
-    padding: '2px 6px',
-  } as const,
-  panel: {
-    position: 'absolute',
-    bottom: '100%',
-    left: 0,
-    marginBottom: 6,
-    minWidth: 300,
-    maxWidth: 380,
-    maxHeight: 320,
-    overflowY: 'auto',
-    background: 'var(--dsw-alias-bg-layer-1, #1e1e1e)',
-    color: 'var(--dsw-alias-label-primary, inherit)',
-    border: '1px solid var(--dsw-alias-border-lowcontrast, #444)',
-    borderRadius: 8,
-    padding: 8,
-    fontSize: 12,
-    boxShadow: '0 4px 16px rgba(0, 0, 0, 0.3)',
-    zIndex: 10,
-  } as const,
-  job: {
-    padding: '6px 4px',
-    borderTop: '1px solid var(--dsw-alias-border-lowcontrast, #444)',
-  } as const,
-  dim: { color: 'var(--dsw-alias-label-dimmed, #888)' } as const,
-  action: {
-    cursor: 'pointer',
-    border: 'none',
-    background: 'transparent',
-    color: 'var(--dsw-alias-brand-primary, #4c8dff)',
-    fontSize: 12,
-    padding: '0 4px',
-  } as const,
-}
-
 export function CronPanel(props: CronPanelProps) {
-  const { connection, wide } = props
+  const { connection, t, wide } = props
   const [open, setOpen] = useState(false)
   const [list, setList] = useState<CronListWire | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const wrap = useRef<HTMLSpanElement | null>(null)
+  const trigger = useRef<HTMLButtonElement | null>(null)
+  // Fixed-panel coordinates, measured from the trigger rect at open time.
+  const [anchor, setAnchor] = useState<{ left: number; bottom: number } | null>(null)
 
   useEffect(() => {
     if (!open) return undefined
@@ -100,14 +64,33 @@ export function CronPanel(props: CronPanelProps) {
     }
   }, [connection, open])
 
+  // Light dismiss: the panel is a non-modal overlay, so a pointer outside the
+  // trigger row or an Escape closes it (the trigger toggle covers clicks on
+  // the trigger itself, which sits inside the same wrap).
+  useEffect(() => {
+    if (!open) return undefined
+    const onPointerDown = (event: PointerEvent): void => {
+      if (wrap.current !== null && !wrap.current.contains(event.target as Node)) setOpen(false)
+    }
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') setOpen(false)
+    }
+    document.addEventListener('pointerdown', onPointerDown)
+    document.addEventListener('keydown', onKeyDown)
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown)
+      document.removeEventListener('keydown', onKeyDown)
+    }
+  }, [open])
+
   const act = async (endpoint: 'remove' | 'fire', id: string): Promise<void> => {
     try {
       if (endpoint === 'fire') {
         const outcome = await callRpc<CronFireWire>(connection, 'fire', { id })
         if (outcome.result !== 'fired') {
           setError(outcome.result === 'no_target'
-            ? `${id}: no live session to run the task (held until one appears)`
-            : `${id}: job not found`)
+            ? t('errorNoTarget', { id })
+            : t('errorMissing', { id }))
         }
       } else {
         await callRpc(connection, endpoint, { id })
@@ -123,7 +106,7 @@ export function CronPanel(props: CronPanelProps) {
   const togglePause = async (job: CronJobWire): Promise<void> => {
     try {
       const outcome = await callRpc<CronUpdateWire>(connection, 'update', { id: job.id, paused: !job.paused })
-      if (!outcome.updated) setError(`${job.id}: cannot update a finished or unknown job`)
+      if (!outcome.updated) setError(t('errorUpdate', { id: job.id }))
       const next = await callRpc<CronListWire>(connection, 'list')
       setList(next)
     } catch (cause) {
@@ -132,37 +115,77 @@ export function CronPanel(props: CronPanelProps) {
   }
 
   const jobs = list?.jobs ?? []
+  const openPanel = (): void => {
+    const rect = trigger.current?.getBoundingClientRect()
+    // The panel floats 5px above the trigger, mirroring the absolute variant.
+    setAnchor(rect === undefined
+      ? null
+      : { left: rect.left, bottom: window.innerHeight - rect.top + 5 })
+    setOpen(value => !value)
+  }
   return (
-    <span style={styles.wrap}>
-      <button type="button" title="Scheduled tasks" style={styles.button} onClick={() => { setOpen(value => !value) }}>
-        {wide ? '⏰ Cron' : '⏰'}
+    <span ref={wrap} className={wide ? css.wrap : `${css.wrap} ${css.rail}`}>
+      <button
+        type="button"
+        title={t('label')}
+        aria-label={t('label')}
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        className={css.trigger}
+        ref={trigger}
+        onClick={openPanel}
+      >
+        <IconClockOutline16 size={wide ? 16 : 18} />
+        {wide && <span>{t('label')}</span>}
       </button>
       {open && (
-        <div style={styles.panel}>
-          <div style={{ ...styles.dim, paddingBottom: 4 }}>Scheduled tasks ({jobs.length})</div>
-          {error !== null && <div style={{ color: 'var(--dsw-alias-label-danger, #e5534b)' }}>{error}</div>}
-          {list !== null && jobs.length === 0 && <div style={styles.dim}>No scheduled jobs.</div>}
+        <div className={css.panel} role="dialog" aria-label={t('label')} style={anchor ?? undefined}>
+          <div className={css.header}>{t('headerCount', { count: jobs.length })}</div>
+          {error !== null && <div className={css.error}>{error}</div>}
+          {list !== null && jobs.length === 0 && <div className={css.empty}>{t('empty')}</div>}
           {jobs.map(job => (
-            <div key={job.id} style={{ ...styles.job, ...(job.state === 'done' ? styles.dim : {}) }}>
-              <div>
-                {job.paused && '⏸ '}{job.state === 'done' ? '✓ ' : ''}{truncate(job.prompt, 80)}
+            <div key={job.id} className={`${css.job}${job.state === 'done' ? ` ${css.done}` : ''}`}>
+              <div className={css.title}>
+                {job.paused && (
+                  <span className={css.stateIcon}>
+                    <IconPauseOutline16 size={12} />
+                  </span>
+                )}
+                {job.state === 'done' && (
+                  <span className={css.stateIcon}>
+                    <IconCheckOutline14 size={12} />
+                  </span>
+                )}
+                {truncate(job.prompt, 80)}
               </div>
-              <div style={styles.dim}>
-                {job.id} · {describeSchedule(job)} · {job.state === 'done' ? 'done' : job.paused ? 'paused' : `next ${job.nextAt}`} · fired {job.fireCount}x
+              <div className={css.meta}>
+                {job.id} · <span className={css.schedule}>{describeSchedule(job, t)}</span>
               </div>
-              {job.lastRun !== null && (
-                <div style={styles.dim}>
-                  last run {job.lastRun.outcome}{job.lastRun.excerpt !== undefined ? ` — ${truncate(job.lastRun.excerpt, 60)}` : ''}
-                </div>
-              )}
-              <div>
+              <div className={css.meta}>
+                {job.state === 'done'
+                  ? t('stateDone')
+                  : job.paused
+                    ? t('statePaused')
+                    : t('nextAt', { at: job.nextAt })}
+                {' · '}
+                {t('firedCount', { count: job.fireCount })}
+                {job.lastRun !== null && ` · ${
+                  job.lastRun.excerpt !== undefined
+                    ? t('lastRunWithExcerpt', {
+                      outcome: job.lastRun.outcome,
+                      excerpt: truncate(job.lastRun.excerpt, 40),
+                    })
+                    : t('lastRun', { outcome: job.lastRun.outcome })
+                }`}
+              </div>
+              <div className={css.actions}>
                 {job.state === 'active' && (
                   <>
-                    <button type="button" style={styles.action} onClick={() => { void act('fire', job.id) }}>Run now</button>
-                    <button type="button" style={styles.action} onClick={() => { void togglePause(job) }}>{job.paused ? 'Resume' : 'Pause'}</button>
+                    <button type="button" className={css.action} onClick={() => { void act('fire', job.id) }}>{t('runNow')}</button>
+                    <button type="button" className={css.action} onClick={() => { void togglePause(job) }}>{job.paused ? t('resume') : t('pause')}</button>
                   </>
                 )}
-                <button type="button" style={styles.action} onClick={() => { void act('remove', job.id) }}>Delete</button>
+                <button type="button" className={`${css.action} ${css.actionDanger}`} onClick={() => { void act('remove', job.id) }}>{t('remove')}</button>
               </div>
             </div>
           ))}

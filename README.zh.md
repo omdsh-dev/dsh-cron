@@ -67,7 +67,7 @@ allowBuilds:
 /cron remove cron-3
 ```
 
-在 `web` profile 中，侧边栏底部的 `⏰ Cron` 按钮打开任务面板：查看全部任务及最近执行结果，支持 Run now / Pause / Delete，经由 loopback `/cron` RPC 通道与主机通信。其他插件也可以通过插件提供的 `cron` 服务驱动同一存储。
+在 `web` profile 中，侧边栏底部的时钟按钮打开任务面板：查看全部任务及最近执行结果，支持立即运行 / 暂停 / 删除，经由 loopback `/cron` RPC 通道与主机通信。其他插件也可以通过插件提供的 `cron` 服务驱动同一存储。
 
 ## 调度规则
 

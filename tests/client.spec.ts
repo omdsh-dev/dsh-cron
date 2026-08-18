@@ -16,6 +16,7 @@ vi.mock('react', async (importOriginal) => {
       clientMocks.states.push(initial)
       return [initial, vi.fn()]
     },
+    useRef: (initial: unknown) => ({ current: initial }),
   }
 })
 
@@ -35,12 +36,14 @@ describe('CronPanel', () => {
     clientMocks.callRpc.mockResolvedValue({ jobs: [], generatedAt: 1 })
     const connection = {} as ConnectionHandle
 
-    // closed: useState(false) for open — the effect returns early.
-    CronPanel({ wide: true, connection })
-    expect(clientMocks.effects).toHaveLength(1)
-    const cleanupClosed = clientMocks.effects[0]?.()
+    // closed: useState(false) for open — both effects return early.
+    CronPanel({ wide: true, connection, t: (key: string) => key })
+    expect(clientMocks.effects).toHaveLength(2)
+    const cleanupPoll = clientMocks.effects[0]?.()
+    const cleanupDismiss = clientMocks.effects[1]?.()
     expect(clientMocks.callRpc).not.toHaveBeenCalled()
-    expect(cleanupClosed).toBeUndefined()
+    expect(cleanupPoll).toBeUndefined()
+    expect(cleanupDismiss).toBeUndefined()
   })
 
   it('registers the sidebar footer action slot on apply', () => {
@@ -48,6 +51,10 @@ describe('CronPanel', () => {
     const injected: Array<readonly unknown[]> = []
     const ctx = {
       get: (name: string) => (name === 'connection' ? {} : undefined),
+      effect: (fn: () => unknown) => { fn() },
+      locale: {
+        register: vi.fn(() => () => {}),
+      },
       slots: {
         inject: (name: string, factory: () => unknown) => {
           const disposer = factory()
@@ -60,10 +67,15 @@ describe('CronPanel', () => {
       },
     }
     apply(ctx as never)
+    expect(ctx.locale.register).toHaveBeenCalledWith('sidebar.cron', {
+      zh: expect.any(Object),
+      en: expect.any(Object),
+    })
     expect(injected).toHaveLength(1)
-    const registration = registered[0] as [{ name: string; id: string }, unknown]
+    const registration = registered[0] as [{ name: string; id: string; locale: string }, unknown]
     expect(registration[0].name).toBe('sidebar.footer.action')
     expect(registration[0].id).toBe('cron')
+    expect(registration[0].locale).toBe('sidebar.cron')
     expect(registration[1]).toBe(CronPanel)
   })
 })
