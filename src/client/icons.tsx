@@ -50,3 +50,24 @@ export const IconCheckOutline14 = ({ size = 14, className }: IconProps) => (
     />
   </svg>
 )
+
+/** Compact close glyph for modal chrome. */
+export const IconCloseOutline16 = ({ size = 16, className }: IconProps) => (
+  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M3.757 3.757a.75.75 0 0 1 1.06 0L8 6.94l3.182-3.183a.75.75 0 1 1 1.061 1.06L9.061 8l3.182 3.182a.75.75 0 1 1-1.06 1.061L8 9.061l-3.182 3.182a.75.75 0 0 1-1.061-1.06L6.939 8 3.757 4.818a.75.75 0 0 1 0-1.061Z" fill="currentColor" />
+  </svg>
+)
+
+/** Compact plus glyph for the create action. */
+export const IconPlusOutline16 = ({ size = 16, className }: IconProps) => (
+  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M8 2.25a.75.75 0 0 1 .75.75v4.25H13a.75.75 0 0 1 0 1.5H8.75V13a.75.75 0 0 1-1.5 0V8.75H3a.75.75 0 0 1 0-1.5h4.25V3A.75.75 0 0 1 8 2.25Z" fill="currentColor" />
+  </svg>
+)
+
+/** Compact disclosure chevron for expandable task rows. */
+export const IconChevronDownOutline16 = ({ size = 16, className }: IconProps) => (
+  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M3.75 6 8 10.25 12.25 6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+)

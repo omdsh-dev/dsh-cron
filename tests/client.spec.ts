@@ -11,7 +11,10 @@ vi.mock('react', async (importOriginal) => {
   const actual = await importOriginal<typeof import('react')>()
   return {
     ...actual,
+    useCallback: (callback: unknown) => callback,
     useEffect: (effect: () => void | (() => void)) => { clientMocks.effects.push(effect) },
+    useId: () => 'test-id',
+    useMemo: (factory: () => unknown) => factory(),
     useState: (initial: unknown) => {
       clientMocks.states.push(initial)
       return [initial, vi.fn()]
@@ -22,7 +25,7 @@ vi.mock('react', async (importOriginal) => {
 
 vi.mock('../src/client/rpc.ts', () => ({ callRpc: clientMocks.callRpc }))
 
-import { CronPanel } from '../src/client/CronPanel.tsx'
+import { CronPanel, formatDateTime } from '../src/client/CronPanel.tsx'
 import { apply } from '../src/client/index.ts'
 
 describe('CronPanel', () => {
@@ -32,12 +35,22 @@ describe('CronPanel', () => {
     clientMocks.callRpc.mockReset()
   })
 
+  it('leaves an invalid wire timestamp visible instead of throwing', () => {
+    expect(formatDateTime('not-a-timestamp')).toBe('not-a-timestamp')
+  })
+
   it('polls the list endpoint only while the panel is open', async () => {
     clientMocks.callRpc.mockResolvedValue({ jobs: [], generatedAt: 1 })
     const connection = {} as ConnectionHandle
 
-    // closed: useState(false) for open — both effects return early.
-    CronPanel({ wide: true, connection, t: (key: string) => key })
+    // Closed: the refresh and keyboard effects both return early.
+    CronPanel({
+      wide: true,
+      connection,
+      t: (key: string) => key,
+      useSessions: selector => selector({ current: undefined } as never),
+      useWorkspaces: selector => selector({} as never),
+    })
     expect(clientMocks.effects).toHaveLength(2)
     const cleanupPoll = clientMocks.effects[0]?.()
     const cleanupDismiss = clientMocks.effects[1]?.()
