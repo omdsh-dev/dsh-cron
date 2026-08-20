@@ -67,7 +67,7 @@ The same store from the human side:
 /cron remove cron-3
 ```
 
-In the `web` profile, a clock action in the sidebar footer opens a panel with every job, its last run, and Run now / Pause / Delete actions, backed by a loopback `/cron` RPC channel. Other plugins can drive the store through the provided `cron` service.
+In the `web` profile, the sidebar clock opens a scheduled-task center. Create recurring or one-shot tasks bound to the current session, filter by status, inspect localized schedule and run details, and Run now / Pause / Delete without involving the model. The UI uses the loopback `/cron` RPC channel; other plugins can drive the same store through the provided `cron` service.
 
 ## Schedules
 

@@ -31,6 +31,33 @@ describe('registerCronRpc', () => {
     expect(result.value.jobs).toEqual(jobs)
   })
 
+  it('adds recurring and one-shot jobs through scheduler validation', async () => {
+    const add = vi.fn().mockReturnValue({ job: { id: 'cron-3' }, deduplicated: false, nextOccurrences: [] })
+    const { captured } = makeHarness({ add })
+    const recurring = await captured('add', {
+      prompt: 'prepare standup',
+      cron: '0 9 * * 1-5',
+      timeZone: 'Asia/Shanghai',
+      createdBy: 'session-1',
+    }, new AbortController().signal) as { ok: boolean; value: { job: { id: string } } }
+    expect(recurring.value.job.id).toBe('cron-3')
+    expect(add).toHaveBeenCalledWith({
+      prompt: 'prepare standup',
+      cron: '0 9 * * 1-5',
+      timeZone: 'Asia/Shanghai',
+      createdBy: 'session-1',
+    })
+
+    await captured('add', {
+      prompt: 'ship release',
+      at: '2026-09-01T01:00:00.000Z',
+    }, new AbortController().signal)
+    expect(add).toHaveBeenLastCalledWith({
+      prompt: 'ship release',
+      at: '2026-09-01T01:00:00.000Z',
+    })
+  })
+
   it('removes and fires by payload id', async () => {
     const remove = vi.fn().mockReturnValue(true)
     const fireNow = vi.fn().mockResolvedValue('fired')
@@ -49,6 +76,12 @@ describe('registerCronRpc', () => {
     expect(unknown.error.message).toContain('unknown endpoint')
     const blank = await captured('remove', { id: '  ' }, new AbortController().signal) as { ok: boolean; error: { message: string } }
     expect(blank.ok).toBe(false)
+    const malformedAdd = await captured('add', { prompt: 42 }, new AbortController().signal) as { ok: boolean; error: { message: string } }
+    expect(malformedAdd.ok).toBe(false)
+    expect(malformedAdd.error.message).toContain('payload.prompt must be a string')
+    const blankOwner = await captured('add', { prompt: 'task', at: '2026-09-01T01:00:00.000Z', createdBy: ' ' }, new AbortController().signal) as { ok: boolean; error: { message: string } }
+    expect(blankOwner.ok).toBe(false)
+    expect(blankOwner.error.message).toContain('payload.createdBy must be a non-blank string')
   })
 
   it('returns a channel disposer', () => {

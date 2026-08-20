@@ -32,6 +32,13 @@ export interface CronListWire {
   readonly generatedAt: number
 }
 
+/** Payload returned after creating or deduplicating a task. */
+export interface CronAddWire {
+  readonly job: CronJobWire
+  readonly deduplicated: boolean
+  readonly nextOccurrences: readonly string[]
+}
+
 /** Payload of the `remove` endpoint. */
 export interface CronRemoveWire {
   readonly id: string

@@ -1,87 +1,151 @@
-/**
- * Locale bundles for the cron sidebar panel, following the dsh web shell
- * bilingual convention: one flat key union, complete en and zh dictionaries.
- * Template placeholders use the `{name}` form; missing text stays visible as
- * its key (fail loud in the UI rather than blank).
- * @module
- */
+/** Bilingual copy for the scheduled-task center. @module */
 
-export type CronKey =
-  /** Trigger row and panel title label. */
-  | 'label'
-  /** Panel header with the job count. */
-  | 'headerCount'
-  /** Empty job list. */
-  | 'empty'
-  /** Fire a job immediately. */
-  | 'runNow'
-  /** Pause a recurring job. */
-  | 'pause'
-  /** Resume a paused job. */
-  | 'resume'
-  /** Remove a job. */
-  | 'remove'
-  /** A finished job. */
-  | 'stateDone'
-  /** A paused job. */
-  | 'statePaused'
-  /** Next fire time of an active job. */
-  | 'nextAt'
-  /** Total fires so far. */
-  | 'firedCount'
-  /** Last run outcome. */
-  | 'lastRun'
-  /** Last run outcome with a result excerpt. */
-  | 'lastRunWithExcerpt'
-  /** One-shot schedule. */
-  | 'scheduleAt'
-  /** Recurring schedule with its time zone. */
-  | 'scheduleExpr'
-  /** Firing found no target session. */
-  | 'errorNoTarget'
-  /** Firing a missing job. */
-  | 'errorMissing'
-  /** Updating a finished or unknown job. */
-  | 'errorUpdate'
+export type CronKey = keyof typeof en
 
-export const en: Record<CronKey, string> = {
+export const en = {
   label: 'Scheduled tasks',
-  headerCount: 'Scheduled tasks ({count})',
-  empty: 'No scheduled tasks.',
+  'filter.all': 'All tasks',
+  'filter.active': 'Scheduled',
+  'filter.paused': 'Paused',
+  'filter.done': 'Completed',
+  navHint: 'Tasks are shared across sessions and survive restarts.',
+  headerSummary: '{count} tasks in this view',
+  newTask: 'New task',
+  close: 'Close scheduled tasks',
+  createTitle: 'Create a scheduled task',
+  createSubtitle: 'Choose a recurring calendar rule or one specific time.',
+  fieldPrompt: 'Task instructions',
+  promptPlaceholder: 'Describe what the agent should do when this task runs…',
+  fieldScheduleType: 'Schedule type',
+  'kind.cron': 'Recurring',
+  'kind.at': 'One time',
+  fieldCron: 'Cron expression',
+  cronHint: 'Five fields: minute, hour, day, month, weekday.',
+  fieldTimeZone: 'Time zone',
+  timeZoneHint: 'Use an IANA name such as Asia/Shanghai.',
+  fieldAt: 'Run at',
+  atHint: 'Interpreted in your browser’s local time zone.',
+  cancel: 'Cancel',
+  create: 'Create task',
+  creating: 'Creating…',
+  loading: 'Loading scheduled tasks…',
+  emptyTitle: 'No tasks here',
+  emptyAll: 'Create a task to run work at a specific time or on a recurring schedule.',
+  emptyFilter: 'Tasks matching this status will appear here.',
+  scheduleOnce: 'One time',
+  scheduleRecurring: 'Recurring · {timeZone}',
+  nextShort: 'Next {at}',
+  'state.active': 'Scheduled',
+  'state.paused': 'Paused',
+  'state.done': 'Completed',
+  detailId: 'Task ID',
+  detailCreated: 'Created',
+  detailFires: 'Activity',
+  detailLastRun: 'Last run',
+  firedCount: 'Fired {count} times',
+  'outcome.delivered': 'Delivered',
+  'outcome.completed': 'Completed',
+  'outcome.error': 'Failed',
+  'outcome.cancelled': 'Cancelled',
+  'outcome.timeout': 'Timed out',
   runNow: 'Run now',
   pause: 'Pause',
   resume: 'Resume',
   remove: 'Delete',
-  stateDone: 'Done',
-  statePaused: 'Paused',
-  nextAt: 'Next {at}',
-  firedCount: 'Fired {count} times',
-  lastRun: 'Last {outcome}',
-  lastRunWithExcerpt: 'Last {outcome}: {excerpt}',
-  scheduleAt: 'Once · {at}',
-  scheduleExpr: '{expression} ({timeZone})',
-  errorNoTarget: '{id}: no session available to run this task (it will run when one appears)',
-  errorMissing: '{id}: task not found',
-  errorUpdate: '{id}: cannot update a finished or unknown task',
-}
+  confirmRemove: 'Delete this task?',
+  confirm: 'Delete',
+  errorLoad: 'Could not load scheduled tasks. Retrying in the background.',
+  errorPrompt: 'Enter task instructions.',
+  errorSchedule: 'Complete the schedule fields.',
+  createErrorPrompt: 'Enter task instructions.',
+  createErrorCron: 'Enter a valid five-field cron expression.',
+  createErrorTimeZone: 'Enter a recognized IANA time zone.',
+  createErrorFuture: 'Choose a time in the future.',
+  createErrorFrequent: 'This schedule runs more frequently than the configured minimum.',
+  createErrorLimit: 'The active task limit has been reached.',
+  createErrorUnreachable: 'This schedule has no reachable occurrence.',
+  createErrorSchedule: 'Complete one valid schedule.',
+  errorNoTarget: '{id}: no session is available to run this task.',
+  errorMissing: '{id}: task not found.',
+  errorUpdate: '{id}: this task can no longer be updated.',
+  noticeCreated: '{id} created.',
+  noticeDeduplicated: 'An identical active task already exists as {id}.',
+  noticeFired: '{id} was dispatched.',
+  noticePaused: '{id} paused.',
+  noticeResumed: '{id} resumed.',
+  noticeRemoved: '{id} deleted.',
+} as const
 
 export const zh: Record<CronKey, string> = {
   label: '定时任务',
-  headerCount: '定时任务（{count}）',
-  empty: '暂无定时任务。',
+  'filter.all': '全部任务',
+  'filter.active': '待执行',
+  'filter.paused': '已暂停',
+  'filter.done': '已完成',
+  navHint: '任务跨会话共享，并在 Harness 重启后继续保留。',
+  headerSummary: '当前视图共 {count} 个任务',
+  newTask: '新建任务',
+  close: '关闭定时任务',
+  createTitle: '新建定时任务',
+  createSubtitle: '选择周期日历规则，或指定一个准确的执行时间。',
+  fieldPrompt: '任务说明',
+  promptPlaceholder: '描述任务触发时希望 Agent 完成的工作…',
+  fieldScheduleType: '调度方式',
+  'kind.cron': '周期执行',
+  'kind.at': '单次执行',
+  fieldCron: 'Cron 表达式',
+  cronHint: '五段格式：分钟、小时、日期、月份、星期。',
+  fieldTimeZone: '时区',
+  timeZoneHint: '使用 IANA 时区名称，例如 Asia/Shanghai。',
+  fieldAt: '执行时间',
+  atHint: '按照当前浏览器所在时区解释。',
+  cancel: '取消',
+  create: '创建任务',
+  creating: '正在创建…',
+  loading: '正在加载定时任务…',
+  emptyTitle: '这里还没有任务',
+  emptyAll: '创建任务，让 Agent 在指定时间或固定周期自动执行工作。',
+  emptyFilter: '符合此状态的任务会显示在这里。',
+  scheduleOnce: '单次执行',
+  scheduleRecurring: '周期执行 · {timeZone}',
+  nextShort: '下次 {at}',
+  'state.active': '待执行',
+  'state.paused': '已暂停',
+  'state.done': '已完成',
+  detailId: '任务 ID',
+  detailCreated: '创建时间',
+  detailFires: '触发情况',
+  detailLastRun: '最近运行',
+  firedCount: '已触发 {count} 次',
+  'outcome.delivered': '已投递',
+  'outcome.completed': '已完成',
+  'outcome.error': '执行失败',
+  'outcome.cancelled': '已取消',
+  'outcome.timeout': '执行超时',
   runNow: '立即运行',
   pause: '暂停',
   resume: '恢复',
   remove: '删除',
-  stateDone: '已完成',
-  statePaused: '已暂停',
-  nextAt: '下次 {at}',
-  firedCount: '已触发 {count} 次',
-  lastRun: '上次 {outcome}',
-  lastRunWithExcerpt: '上次 {outcome}：{excerpt}',
-  scheduleAt: '一次性 · {at}',
-  scheduleExpr: '{expression}（{timeZone}）',
-  errorNoTarget: '{id}：没有可用会话运行该任务（将保留至会话出现）',
-  errorMissing: '{id}：任务不存在',
-  errorUpdate: '{id}：无法更新已结束或未知任务',
+  confirmRemove: '确定删除此任务？',
+  confirm: '确认删除',
+  errorLoad: '无法加载定时任务，后台将自动重试。',
+  errorPrompt: '请输入任务说明。',
+  errorSchedule: '请完整填写调度信息。',
+  createErrorPrompt: '请输入任务说明。',
+  createErrorCron: '请输入有效的五段 Cron 表达式。',
+  createErrorTimeZone: '请输入有效的 IANA 时区名称。',
+  createErrorFuture: '请选择未来的执行时间。',
+  createErrorFrequent: '此规则的执行频率超过了当前允许的最小间隔。',
+  createErrorLimit: '活动任务数量已达到上限。',
+  createErrorUnreachable: '此规则在可计算范围内没有执行时间。',
+  createErrorSchedule: '请填写一种完整有效的调度方式。',
+  errorNoTarget: '{id}：当前没有可用会话执行此任务。',
+  errorMissing: '{id}：任务不存在。',
+  errorUpdate: '{id}：此任务已无法更新。',
+  noticeCreated: '已创建 {id}。',
+  noticeDeduplicated: '相同的活动任务已经存在：{id}。',
+  noticeFired: '已投递 {id}。',
+  noticePaused: '已暂停 {id}。',
+  noticeResumed: '已恢复 {id}。',
+  noticeRemoved: '已删除 {id}。',
 }

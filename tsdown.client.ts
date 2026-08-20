@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises'
 import { basename } from 'node:path'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import type { UserConfig } from 'tsdown'
 import { transform } from 'lightningcss'
 
@@ -26,6 +27,11 @@ const CLIENT_EXTERNALS = [
  */
 const CSS_VIRTUAL_PREFIX = '\0dsh-css:'
 const CSS_VIRTUAL_SUFFIX = '.mjs'
+
+export function resolveCssModulePath(source: string, importer: string | undefined): string {
+  if (importer === undefined) return source
+  return fileURLToPath(new URL(source, pathToFileURL(importer)))
+}
 
 /**
  * The browser bundle: one CJS payload the shell's module loader executes,
@@ -67,7 +73,7 @@ export function clientBundle(): UserConfig {
       name: 'dsh-css-modules-inline',
       resolveId(source: string, importer: string | undefined) {
         if (!source.endsWith('.module.css')) return null
-        const abs = importer !== undefined ? (new URL(source, `file://${importer}`)).pathname : source
+        const abs = resolveCssModulePath(source, importer)
         return CSS_VIRTUAL_PREFIX + abs + CSS_VIRTUAL_SUFFIX
       },
       async load(virtualId: string) {

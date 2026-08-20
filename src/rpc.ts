@@ -1,6 +1,6 @@
 /**
- * `/cron` RPC channel (loopback): the browser panel's list, remove, and
- * fire-now actions over the shared scheduler.
+ * `/cron` RPC channel (loopback): the browser task center's create, list,
+ * update, remove, and fire-now actions over the shared scheduler.
  * @module dsh-cron/rpc
  */
 
@@ -22,6 +22,20 @@ function payloadId(payload: unknown): string {
   return id.trim()
 }
 
+function payloadText(payload: unknown, key: string): string | undefined {
+  const value = (payload as Record<string, unknown> | undefined)?.[key]
+  if (value === undefined) return undefined
+  if (typeof value !== 'string') throw new Error(`dsh-cron RPC: payload.${key} must be a string`)
+  return value
+}
+
+function payloadOptionalId(payload: unknown, key: string): string | undefined {
+  const value = payloadText(payload, key)
+  if (value === undefined) return undefined
+  if (value.trim().length === 0) throw new Error(`dsh-cron RPC: payload.${key} must be a non-blank string`)
+  return value.trim()
+}
+
 /**
  * Register the `/cron` channel handlers.
  * @param ctx - context carrying the `connection` service.
@@ -33,6 +47,19 @@ export function registerCronRpc(ctx: Context, service: CronService): () => void 
     try {
       switch (endpoint) {
         case 'list': return ok({ jobs: service.list(), generatedAt: Date.now() })
+        case 'add': {
+          const cron = payloadText(payload, 'cron')
+          const timeZone = payloadText(payload, 'timeZone')
+          const at = payloadText(payload, 'at')
+          const createdBy = payloadOptionalId(payload, 'createdBy')
+          return ok(service.add({
+            prompt: payloadText(payload, 'prompt') ?? '',
+            ...(cron === undefined ? {} : { cron }),
+            ...(timeZone === undefined ? {} : { timeZone }),
+            ...(at === undefined ? {} : { at }),
+            ...(createdBy === undefined ? {} : { createdBy }),
+          }))
+        }
         case 'remove': return ok({ id: payloadId(payload), removed: service.remove(payloadId(payload)) })
         case 'update': {
           const paused = (payload as { paused?: unknown } | undefined)?.paused

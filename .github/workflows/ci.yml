@@ -20,7 +20,9 @@ jobs:
         with:
           node-version: ${{ matrix.node }}
           cache: pnpm
-      - run: pnpm install
+      # Keep package lifecycle builds explicit below so install failures remain
+      # distinguishable from build and packaging failures.
+      - run: pnpm install --frozen-lockfile --ignore-scripts
       - run: pnpm run verify:self-contained
       - run: pnpm run typecheck
       - run: pnpm test
