@@ -13,7 +13,9 @@ function packageFile(packageName, relativePath) {
 
 const steps = [
   ['tsc', packageFile('typescript', 'bin/tsc'), ['-p', 'tsconfig.prepare.dts.json']],
-  ['tsdown', packageFile('tsdown', 'dist/run.mjs'), ['--config', 'tsdown.prepare.config.ts']],
+  // Keep the documented Node 22.19 floor working when Git dependencies build
+  // from node_modules, where Node's native TypeScript stripping is unavailable.
+  ['tsdown', packageFile('tsdown', 'dist/run.mjs'), ['--config', 'tsdown.prepare.config.ts', '--config-loader', 'tsx']],
 ]
 
 rmSync(join(root, 'lib'), { recursive: true, force: true })

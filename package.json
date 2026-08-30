@@ -139,6 +139,7 @@
     "react-dom": "18.3.1",
     "lightningcss": "^1.32.0",
     "tsdown": "0.22.2",
+    "tsx": "4.20.6",
     "typescript": "6.0.3",
     "vitest": "4.1.8"
   },
