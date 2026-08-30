@@ -37,11 +37,16 @@ const resolvedCommit = exactCommitPattern.test(ref) ? ref : capture('git', ['rev
 if (!exactCommitPattern.test(resolvedCommit)) throw new Error(`could not resolve ${ref} to an exact commit`)
 
 const expected = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))
-const profilePeers = Object.keys(expected.peerDependencies ?? {}).map((name) => {
+const profileDependencies = new Map()
+for (const [name, version] of Object.entries(expected.devDependencies ?? {})) {
+  if (name.startsWith('@deepseek-ai/') && typeof version === 'string') profileDependencies.set(name, version)
+}
+for (const name of Object.keys(expected.peerDependencies ?? {})) {
   const version = expected.devDependencies?.[name]
   if (typeof version !== 'string') throw new Error(`no audited smoke version is configured for peer ${name}`)
-  return `${name}@${version}`
-})
+  profileDependencies.set(name, version)
+}
+const auditedProfile = [...profileDependencies].map(([name, version]) => `${name}@${version}`)
 const workspace = mkdtempSync(join(tmpdir(), `${PACKAGE_NAME}-git-smoke-`))
 try {
   writeFileSync(join(workspace, 'package.json'), JSON.stringify({ private: true, type: 'module', packageManager: expected.packageManager }, null, 2))
@@ -52,7 +57,10 @@ try {
     `  '${PACKAGE_NAME}@https://codeload.github.com/${REPOSITORY}/tar.gz/${resolvedCommit}': true`,
     '',
   ].join('\n'))
-  run('pnpm', ['add', '--save-exact', `github:${REPOSITORY}#${ref}`, ...profilePeers], workspace)
+  // Install the complete audited DSH dependency face. Installing only this
+  // plugin's direct peers lets pnpm resolve their peers through npm's default
+  // dist-tag, which does not represent DSH's coordinated prerelease profile.
+  run('pnpm', ['add', '--save-exact', `github:${REPOSITORY}#${ref}`, ...auditedProfile], workspace)
 
   const require = createRequire(join(workspace, 'smoke.cjs'))
   const entry = require.resolve(PACKAGE_NAME)
