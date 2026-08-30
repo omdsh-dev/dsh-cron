@@ -7,6 +7,8 @@
  * @module
  */
 
+import type { ReactElement } from 'react'
+
 export interface IconProps {
   /** Square edge in px; defaults to the glyph's own drawn size. */
   size?: number | undefined
@@ -15,7 +17,7 @@ export interface IconProps {
 }
 
 /** ic_ds_clock_outline_16: ring + 10:10 rounded hands (design-system style). */
-export const IconClockOutline16 = ({ size = 16, className }: IconProps) => (
+export const IconClockOutline16 = ({ size = 16, className }: IconProps): ReactElement => (
   <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
     <path
       fillRule="evenodd"
@@ -30,7 +32,7 @@ export const IconClockOutline16 = ({ size = 16, className }: IconProps) => (
 )
 
 /** ic_ds_pause_outline_16 (mirrors @deepseek-ai/dsh-client-ui-primitives). */
-export const IconPauseOutline16 = ({ size = 16, className }: IconProps) => (
+export const IconPauseOutline16 = ({ size = 16, className }: IconProps): ReactElement => (
   <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
     <path
       d="M14.1448 8.00024C14.1448 4.60644 11.394 1.85563 8.00024 1.85563C4.60644 1.85563 1.85563 4.60644 1.85563 8.00024C1.85563 11.394 4.60644 14.1448 8.00024 14.1448C11.394 14.1448 14.1448 11.394 14.1448 8.00024ZM15.5112 8.00024C15.5112 12.1482 12.1482 15.5112 8.00024 15.5112C3.85226 15.5112 0.489258 12.1482 0.489258 8.00024C0.489258 3.85226 3.85226 0.489258 8.00024 0.489258C12.1482 0.489258 15.5112 3.85226 15.5112 8.00024Z"
@@ -42,7 +44,7 @@ export const IconPauseOutline16 = ({ size = 16, className }: IconProps) => (
 )
 
 /** ic_ds_check_outline_14 (mirrors @deepseek-ai/dsh-client-ui-primitives). */
-export const IconCheckOutline14 = ({ size = 14, className }: IconProps) => (
+export const IconCheckOutline14 = ({ size = 14, className }: IconProps): ReactElement => (
   <svg width={size} height={size} className={className} viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
     <path
       d="M11.5635 4.58984L7.61426 9.07715C7.35154 9.37561 7.11346 9.64812 6.89453 9.84668C6.66593 10.054 6.38519 10.2506 6.01465 10.3164C5.82079 10.3508 5.62207 10.3529 5.42773 10.3213C5.0561 10.2609 4.77266 10.0674 4.54102 9.86328C4.31926 9.66791 4.07752 9.39911 3.81055 9.10449L2.44531 7.59863L3.55664 6.59082L4.92188 8.09766C5.21256 8.41844 5.38878 8.61191 5.53223 8.73828C5.61022 8.80699 5.65253 8.83192 5.66895 8.83984C5.69648 8.84429 5.72449 8.84467 5.75195 8.83984C5.72657 8.84451 5.75564 8.85422 5.88672 8.73535C6.02833 8.60692 6.20225 8.41088 6.48828 8.08594L10.4385 3.59961L11.5635 4.58984Z"
@@ -52,21 +54,21 @@ export const IconCheckOutline14 = ({ size = 14, className }: IconProps) => (
 )
 
 /** Compact close glyph for modal chrome. */
-export const IconCloseOutline16 = ({ size = 16, className }: IconProps) => (
+export const IconCloseOutline16 = ({ size = 16, className }: IconProps): ReactElement => (
   <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
     <path d="M3.757 3.757a.75.75 0 0 1 1.06 0L8 6.94l3.182-3.183a.75.75 0 1 1 1.061 1.06L9.061 8l3.182 3.182a.75.75 0 1 1-1.06 1.061L8 9.061l-3.182 3.182a.75.75 0 0 1-1.061-1.06L6.939 8 3.757 4.818a.75.75 0 0 1 0-1.061Z" fill="currentColor" />
   </svg>
 )
 
 /** Compact plus glyph for the create action. */
-export const IconPlusOutline16 = ({ size = 16, className }: IconProps) => (
+export const IconPlusOutline16 = ({ size = 16, className }: IconProps): ReactElement => (
   <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
     <path d="M8 2.25a.75.75 0 0 1 .75.75v4.25H13a.75.75 0 0 1 0 1.5H8.75V13a.75.75 0 0 1-1.5 0V8.75H3a.75.75 0 0 1 0-1.5h4.25V3A.75.75 0 0 1 8 2.25Z" fill="currentColor" />
   </svg>
 )
 
 /** Compact disclosure chevron for expandable task rows. */
-export const IconChevronDownOutline16 = ({ size = 16, className }: IconProps) => (
+export const IconChevronDownOutline16 = ({ size = 16, className }: IconProps): ReactElement => (
   <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
     <path d="M3.75 6 8 10.25 12.25 6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
   </svg>

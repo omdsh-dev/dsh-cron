@@ -6,12 +6,21 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent, AgentSetup } from '@deepseek-ai/dsh-agent'
-import { resolveSessionPreset } from '@deepseek-ai/dsh-agent-presets'
+import type {} from '@deepseek-ai/dsh-agent-presets'
 import { SessionId, type SessionEvent } from '@deepseek-ai/dsh-session'
 import type SessionPersistence from '@deepseek-ai/dsh-session-persistence'
 import type { SessionInspection } from '@deepseek-ai/dsh-session-persistence'
 // Type-only: merges the `agentDefaultModel` service type used through ctx.get.
 import type {} from '@deepseek-ai/dsh-agent-default-model'
+
+/** Resolve the durable preset without depending on the removed legacy helper. */
+function resolveSessionPreset(meta: SessionInspection['meta'], events: readonly SessionEvent[]): string | undefined {
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    const event = events[index]
+    if (event?.type === 'agent-preset/selected') return event.data.agentPreset
+  }
+  return meta.agentPreset
+}
 
 /** The last model selection recorded on the session's request headers. */
 export function lastRequestConfig(
@@ -58,7 +67,7 @@ export async function wakeColdSession(
   const setup: AgentSetup | undefined = presets === undefined
     ? undefined
     : async (agentCtx) => {
-        await presets.mount(agentCtx, resolveSessionPreset({ header: inspected.meta, events }))
+        await presets.mount(agentCtx, resolveSessionPreset(inspected.meta, events))
       }
   const recorded = lastRequestConfig(events)
   const defaults = ctx.get('agentDefaultModel')?.currentSelection()
