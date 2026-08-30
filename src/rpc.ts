@@ -6,14 +6,27 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-client-connection'
-import type { RpcResult } from '@deepseek-ai/dsh-host-apiproxy/api'
-import { transportError } from '@deepseek-ai/dsh-host-apiproxy/api'
 import type { CronService } from './scheduler.ts'
 
 export const CRON_RPC_CHANNEL = '/cron'
 
+type RpcResult<T> =
+  | { readonly ok: true; readonly value: T }
+  | { readonly ok: false; readonly error: { readonly code: string; readonly message: string; readonly details: object } }
+
 function ok<T>(value: T): RpcResult<T> {
   return { ok: true, value }
+}
+
+function transportError<T>(error: unknown): RpcResult<T> {
+  return {
+    ok: false,
+    error: {
+      code: 'internal',
+      message: error instanceof Error ? error.message : String(error),
+      details: {},
+    },
+  }
 }
 
 function payloadId(payload: unknown): string {
@@ -43,7 +56,14 @@ function payloadOptionalId(payload: unknown, key: string): string | undefined {
  * @returns the channel disposer.
  */
 export function registerCronRpc(ctx: Context, service: CronService): () => void {
-  const handle = ctx.connection.rpc.handle(CRON_RPC_CHANNEL, async (endpoint, payload, _signal) => {
+  // rc.2 required an authority option; alpha.1 authenticates every channel and
+  // removed that parameter. JavaScript safely ignores the retained option.
+  const register = ctx.connection.rpc.handle as unknown as (
+    channel: string,
+    handler: (endpoint: string, payload: unknown, signal: AbortSignal) => Promise<RpcResult<unknown>>,
+    options?: { authority: 'loopback' },
+  ) => () => Promise<void>
+  const handle = register(CRON_RPC_CHANNEL, async (endpoint, payload, _signal) => {
     try {
       switch (endpoint) {
         case 'list': return ok({ jobs: service.list(), generatedAt: Date.now() })
