@@ -42,11 +42,21 @@ for (const [name, version] of Object.entries(expected.devDependencies ?? {})) {
   if (name.startsWith('@deepseek-ai/') && typeof version === 'string') profileDependencies.set(name, version)
 }
 for (const name of Object.keys(expected.peerDependencies ?? {})) {
-  const version = expected.devDependencies?.[name]
+  const version = expected.devDependencies?.[name] ?? expected.dshSmoke?.peerSources?.[name]
   if (typeof version !== 'string') throw new Error(`no audited smoke version is configured for peer ${name}`)
   profileDependencies.set(name, version)
 }
+for (const [name, version] of Object.entries(expected.dshSmoke?.profileOverrides ?? {})) {
+  if (typeof version !== 'string') throw new Error(`audited smoke profile override for ${name} must be a string`)
+  profileDependencies.set(name, version)
+}
 const auditedProfile = [...profileDependencies].map(([name, version]) => `${name}@${version}`)
+const peerBuildAllowlist = []
+for (const [name, source] of Object.entries(expected.dshSmoke?.peerSources ?? {})) {
+  const match = typeof source === 'string' ? new RegExp('^github:([^#]+)#([0-9a-f]{40})$').exec(source) : null
+  if (match === null) throw new Error(`audited peer source for ${name} must pin an exact GitHub commit`)
+  peerBuildAllowlist.push(`  '${name}@https://codeload.github.com/${match[1]}/tar.gz/${match[2]}': true`)
+}
 const workspace = mkdtempSync(join(tmpdir(), `${PACKAGE_NAME}-git-smoke-`))
 try {
   writeFileSync(join(workspace, 'package.json'), JSON.stringify({ private: true, type: 'module', packageManager: expected.packageManager }, null, 2))
@@ -55,6 +65,7 @@ try {
     "  - '.'",
     'allowBuilds:',
     `  '${PACKAGE_NAME}@https://codeload.github.com/${REPOSITORY}/tar.gz/${resolvedCommit}': true`,
+    ...peerBuildAllowlist,
     '',
   ].join('\n'))
   // Install the complete audited DSH dependency face. Installing only this

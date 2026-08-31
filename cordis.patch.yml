@@ -11,8 +11,9 @@
       #   defaultTimeZone: <string>    # IANA zone for schedules; defaults to the host local zone
       #   maxJobs: 64                  # maximum active jobs
       #   minIntervalMinutes: 1        # minimum gap between recurring fires
-      #   coldWake: false              # resume a due job's cold creating session
-      #   busyDelivery: followup       # or 'inject' (busy-target delivery mode)
+      #   defaultCwd: <absolute-workspace> # required for browser/API jobs without an explicit target
+      #   reconcilePollMs: 1000        # durable Automation event-feed polling interval
+      #   maxRunHistory: 100           # retained source occurrences per job
 
 # No invariant companion row: the shipped web/headless profiles do not compose
 # the `invariants` service, so an invariant row would never resolve there.

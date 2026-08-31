@@ -7,6 +7,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { CommandResult } from '@deepseek-ai/dsh-commands'
 import type { CronScheduler } from './scheduler.ts'
 import type { CronJob } from './store.ts'
+import { targetFromAgent } from './target.ts'
 
 const USAGE = 'Usage: /cron list | /cron remove <id> | /cron pause <id> | /cron resume <id> | /cron add [tz=Zone] <minute> <hour> <dom> <month> <dow> <prompt...> | /cron add-at <rfc3339> <prompt...>'
 
@@ -17,7 +18,7 @@ function formatJob(job: CronJob): string {
     ? `cron "${job.schedule.expression}" (${job.schedule.timeZone})`
     : `at ${job.schedule.at}`
   const state = job.state === 'done' ? 'done' : job.paused ? 'paused' : `next ${job.nextAt}`
-  const run = job.lastRun === null ? '' : `  last run ${job.lastRun.outcome}`
+  const run = job.lastRun === null ? '' : `  last run ${job.lastRun.outcome ?? job.lastRun.state}`
   return `${job.id}  ${schedule}  ${state}  fired ${job.fireCount}x${run}  ${job.prompt}`
 }
 
@@ -40,6 +41,7 @@ export function registerCronCommand(ctx: Context, scheduler: CronScheduler): () 
     input: { hint: 'list | remove <id> | add <m> <h> <dom> <mon> <dow> <prompt> | add-at <rfc3339> <prompt>' },
     handler: ({ rawInput, agent }): CommandResult => {
       const createdBy = String(agent.id)
+      const target = () => targetFromAgent(agent)
       const input = rawInput.trim()
       if (input === '' || input === 'list') return formatList(scheduler)
       if (input.startsWith('remove ')) {
@@ -62,7 +64,7 @@ export function registerCronCommand(ctx: Context, scheduler: CronScheduler): () 
         const space = rest.indexOf(' ')
         if (space === -1) return { kind: 'error', text: USAGE }
         try {
-          const result = scheduler.addJob({ at: rest.slice(0, space), prompt: rest.slice(space + 1), createdBy })
+          const result = scheduler.addJob({ at: rest.slice(0, space), prompt: rest.slice(space + 1), createdBy, target: target() })
           return { kind: 'success', text: `Added ${formatJob(result.job)}` }
         } catch (error) {
           return { kind: 'error', text: `cron add-at: ${(error as Error).message}` }
@@ -80,6 +82,7 @@ export function registerCronCommand(ctx: Context, scheduler: CronScheduler): () 
             cron: expression,
             prompt,
             createdBy,
+            target: target(),
             ...(timeZone === undefined ? {} : { timeZone }),
           })
           return { kind: 'success', text: `Added ${formatJob(result.job)}` }

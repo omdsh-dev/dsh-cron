@@ -15,17 +15,12 @@ export interface Config {
   maxJobs?: number
   /** Minimum minutes between two occurrences of one recurring job. */
   minIntervalMinutes?: number
-  /**
-   * Resume a due job's cold creating session so the task can fire without any
-   * live session. Off by default: a woken session runs unattended model turns.
-   */
-  coldWake?: boolean
-  /**
-   * Delivery when the target agent is busy. `followup` queues the task as the
-   * next turn (it always executes); `inject` rides the running turn as
-   * context and may not be acted on.
-   */
-  busyDelivery?: 'followup' | 'inject'
+  /** Default absolute workspace for UI/API jobs that do not supply a fresh Session target. */
+  defaultCwd?: string
+  /** Durable Automation event-feed reconciliation interval. */
+  reconcilePollMs?: number
+  /** Maximum retained occurrence records per job; active records are never trimmed. */
+  maxRunHistory?: number
 }
 
 /** Configuration after defaults have been resolved. */
@@ -38,10 +33,9 @@ export interface ResolvedConfig {
   maxJobs: number
   /** Minimum minutes between two occurrences of one recurring job. */
   minIntervalMinutes: number
-  /** Resume a due job's cold creating session. */
-  coldWake: boolean
-  /** Delivery mode for busy targets. */
-  busyDelivery: 'followup' | 'inject'
+  defaultCwd?: string
+  reconcilePollMs: number
+  maxRunHistory: number
 }
 
 /** Loader-visible configuration schema and defaults. */
@@ -50,8 +44,9 @@ export const Config: z<Config> = z.object({
   defaultTimeZone: z.string(),
   maxJobs: z.number().default(64),
   minIntervalMinutes: z.number().default(1),
-  coldWake: z.boolean().default(false),
-  busyDelivery: z.union([z.const('followup'), z.const('inject')]).default('followup'),
+  defaultCwd: z.string(),
+  reconcilePollMs: z.number().step(1).min(100).max(60_000).default(1_000),
+  maxRunHistory: z.number().step(1).min(10).max(10_000).default(100),
 })
 
 /** The host's local IANA time zone. */
@@ -70,7 +65,8 @@ export function resolveConfig(config: Config = {}): ResolvedConfig {
     defaultTimeZone: config.defaultTimeZone ?? hostTimeZone(),
     maxJobs: config.maxJobs ?? 64,
     minIntervalMinutes: config.minIntervalMinutes ?? 1,
-    coldWake: config.coldWake ?? false,
-    busyDelivery: config.busyDelivery ?? 'followup',
+    ...(config.defaultCwd === undefined ? {} : { defaultCwd: config.defaultCwd }),
+    reconcilePollMs: config.reconcilePollMs ?? 1_000,
+    maxRunHistory: config.maxRunHistory ?? 100,
   }
 }

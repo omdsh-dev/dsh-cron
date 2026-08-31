@@ -12,9 +12,10 @@ describe('client bundle manifest', () => {
     expect(manifest.dsh.bundle.patch).toBe('./cordis.patch.yml')
   })
 
-  it('keeps react and client packages as optional peers', () => {
+  it('requires Automation while keeping host/client composition peers optional', () => {
     expect(manifest.peerDependencies.react).toBe('^18.2.0')
-    for (const name of Object.keys(manifest.peerDependencies)) {
+    expect(manifest.peerDependencies['dsh-automation']).toBe('>=0.2.0-alpha.0 <0.3.0')
+    for (const name of Object.keys(manifest.peerDependencies).filter(name => name !== 'dsh-automation')) {
       expect(manifest.peerDependenciesMeta[name]?.optional, name).toBe(true)
     }
   })

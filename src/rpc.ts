@@ -7,6 +7,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-client-connection'
 import type { CronService } from './scheduler.ts'
+import { targetFromPayload } from './target.ts'
 
 export const CRON_RPC_CHANNEL = '/cron'
 
@@ -72,12 +73,14 @@ export function registerCronRpc(ctx: Context, service: CronService): () => void 
           const timeZone = payloadText(payload, 'timeZone')
           const at = payloadText(payload, 'at')
           const createdBy = payloadOptionalId(payload, 'createdBy')
+          const target = targetFromPayload(payload)
           return ok(service.add({
             prompt: payloadText(payload, 'prompt') ?? '',
             ...(cron === undefined ? {} : { cron }),
             ...(timeZone === undefined ? {} : { timeZone }),
             ...(at === undefined ? {} : { at }),
             ...(createdBy === undefined ? {} : { createdBy }),
+            ...(target === undefined ? {} : { target }),
           }))
         }
         case 'remove': return ok({ id: payloadId(payload), removed: service.remove(payloadId(payload)) })
