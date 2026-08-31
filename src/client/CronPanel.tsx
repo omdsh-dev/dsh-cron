@@ -59,8 +59,8 @@ export function formatDateTime(value: string): string {
   }).format(parsed)
 }
 
-function outcomeLabel(outcome: NonNullable<CronJobWire['lastRun']>['outcome'], t: CronPanelProps['t']): string {
-  return t(`outcome.${outcome}`)
+function outcomeLabel(run: NonNullable<CronJobWire['lastRun']>, t: CronPanelProps['t']): string {
+  return t(`outcome.${run.outcome ?? run.state}`)
 }
 
 function scheduleLabel(job: CronJobWire, t: CronPanelProps['t']): string {
@@ -179,8 +179,8 @@ export function CronPanel({ connection, t, useSessions, wide }: CronPanelProps) 
     try {
       if (kind === 'fire') {
         const outcome = await callRpc<CronFireWire>(connection, 'fire', { id: job.id })
-        if (outcome.result !== 'fired') {
-          throw new Error(outcome.result === 'no_target' ? t('errorNoTarget', { id: job.id }) : t('errorMissing', { id: job.id }))
+        if (outcome.result !== 'submitted') {
+          throw new Error(outcome.result === 'target_required' ? t('errorNoTarget', { id: job.id }) : t('errorMissing', { id: job.id }))
         }
         setNotice(t('noticeFired', { id: job.id }))
       } else if (kind === 'pause') {
@@ -405,7 +405,7 @@ export function CronPanel({ connection, t, useSessions, wide }: CronPanelProps) 
                                 <div><dt>{t('detailId')}</dt><dd><code>{job.id}</code></dd></div>
                                 <div><dt>{t('detailCreated')}</dt><dd>{formatDateTime(job.createdAt)}</dd></div>
                                 <div><dt>{t('detailFires')}</dt><dd>{t('firedCount', { count: job.fireCount })}</dd></div>
-                                {job.lastRun !== null && <div><dt>{t('detailLastRun')}</dt><dd>{outcomeLabel(job.lastRun.outcome, t)} · {formatDateTime(job.lastRun.firedAt)}</dd></div>}
+                                {job.lastRun !== null && <div><dt>{t('detailLastRun')}</dt><dd>{outcomeLabel(job.lastRun, t)} · {formatDateTime(job.lastRun.firedAt)}</dd></div>}
                               </dl>
                               {job.lastRun?.excerpt !== undefined && <div className={css.excerpt}>{job.lastRun.excerpt}</div>}
                               <div className={css.jobActions}>

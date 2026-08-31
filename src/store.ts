@@ -6,6 +6,9 @@
 
 import { mkdirSync, readFileSync, renameSync, statSync, writeFileSync, type Stats } from 'node:fs'
 import { dirname } from 'node:path'
+import type { AutomationRunState, AutomationTarget } from './automation.ts'
+import { acquireDirLock, type DirLock } from './filelock.ts'
+import { mergeJobs } from './store-merge.ts'
 
 /** One-shot absolute schedule, RFC 3339 UTC. */
 export interface AtSchedule {
@@ -25,14 +28,19 @@ export type JobSchedule = AtSchedule | CronSchedule
 
 /** The recorded outcome of one dispatch. */
 export interface CronRunRecord {
-  /** RFC 3339 UTC dispatch time. */
-  readonly firedAt: string
-  /** RFC 3339 UTC turn completion; absent while pending. */
-  readonly completedAt?: string
-  /** `delivered` while the turn runs; final states: completed/error/cancelled/timeout. */
-  readonly outcome: 'delivered' | 'completed' | 'error' | 'cancelled' | 'timeout'
-  /** Leading excerpt of the turn's assistant text (bounded). */
-  readonly excerpt?: string
+  /** Stable source occurrence identity. */
+  readonly occurrenceId: string
+  readonly scheduledAt: string
+  readonly idempotencyKey: string
+  /** RFC 3339 UTC submission time. */
+  firedAt: string
+  automationRunId?: string
+  state: 'submitting' | AutomationRunState | 'legacy'
+  completedAt?: string
+  outcome?: string
+  excerpt?: string
+  error?: string
+  lastEventSeq?: number
 }
 
 /** One durable scheduled job. */
@@ -44,6 +52,10 @@ export interface CronJob {
   readonly schedule: JobSchedule
   /** Session id of the creating agent, preferred at dispatch; null when unknown. */
   readonly createdBy: string | null
+  /** Fresh canonical Session target owned by Automation; null means a legacy job awaiting retarget. */
+  target: AutomationTarget | null
+  concurrencyLimit: number
+  migrationIssue?: string
   /** RFC 3339 UTC creation time. */
   readonly createdAt: string
   /** RFC 3339 UTC of the next pending fire; in the past while overdue. */
@@ -58,9 +70,10 @@ export interface CronJob {
   paused: boolean
   /** The most recent dispatch outcome, or null. */
   lastRun: CronRunRecord | null
+  runs: CronRunRecord[]
 }
 
-const STORE_VERSION = 1
+const STORE_VERSION = 2
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -77,6 +90,8 @@ function isValidJob(value: unknown): value is CronJob {
   if (value.state !== undefined && value.state !== 'active' && value.state !== 'done') return false
   if (value.paused !== undefined && typeof value.paused !== 'boolean') return false
   if (value.lastRun !== undefined && value.lastRun !== null && !isRecord(value.lastRun)) return false
+  if (value.target !== undefined && value.target !== null && !isRecord(value.target)) return false
+  if (value.runs !== undefined && !Array.isArray(value.runs)) return false
   const schedule = value.schedule
   if (!isRecord(schedule)) return false
   if (schedule.kind === 'at') return typeof schedule.at === 'string'
@@ -85,10 +100,32 @@ function isValidJob(value: unknown): value is CronJob {
 }
 
 /** Fill fields introduced after the first store version. */
-function normalizeJob(job: CronJob): CronJob {
+function normalizeJob(job: CronJob, fallbackTarget: AutomationTarget | undefined): CronJob {
   job.state ??= 'active'
   job.paused ??= false
-  job.lastRun ??= null
+  job.runs ??= []
+  if (job.target === undefined) {
+    job.target = fallbackTarget ?? null
+    if (job.target === null) {
+      job.paused = true
+      job.migrationIssue = 'legacy job requires a fresh Session target before it can resume'
+    }
+  }
+  job.concurrencyLimit ??= 1
+  if (job.lastRun !== null && job.lastRun !== undefined && job.runs.length === 0) {
+    const legacy = job.lastRun as unknown as Record<string, unknown>
+    job.runs.push({
+      occurrenceId: `legacy:${String(legacy['firedAt'] ?? job.lastFiredAt ?? job.createdAt)}`,
+      scheduledAt: String(legacy['firedAt'] ?? job.lastFiredAt ?? job.createdAt),
+      idempotencyKey: `legacy:${job.id}`,
+      firedAt: String(legacy['firedAt'] ?? job.lastFiredAt ?? job.createdAt),
+      state: 'legacy',
+      ...(typeof legacy['completedAt'] === 'string' ? { completedAt: legacy['completedAt'] } : {}),
+      ...(typeof legacy['outcome'] === 'string' ? { outcome: legacy['outcome'] } : {}),
+      ...(typeof legacy['excerpt'] === 'string' ? { excerpt: legacy['excerpt'] } : {}),
+    })
+  }
+  job.lastRun = job.runs.at(-1) ?? null
   return job
 }
 
@@ -103,6 +140,12 @@ export class CronStore {
   private watcher: ReturnType<typeof setInterval> | null = null
   private lastWritten: string | null = null
   private lastStat: { mtimeMs: number; size: number } | null = null
+  private eventSeq = 0
+  private loadedVersion = STORE_VERSION
+  private readonly writeLockDir: string
+  private readonly seqFile: string
+  private readonly baseJobs = new Map<string, string>()
+  private readonly deletedIds = new Set<string>()
 
   /**
    * @param filePath - absolute path of the JSON store file.
@@ -111,7 +154,12 @@ export class CronStore {
   constructor(
     private readonly filePath: string,
     private readonly warn: (message: string) => void,
-  ) {}
+    private readonly fallbackTarget?: AutomationTarget,
+    private readonly maxRunHistory = 100,
+  ) {
+    this.writeLockDir = `${filePath}.lock`
+    this.seqFile = `${filePath}.seq`
+  }
 
   /** Load the store from disk; a missing file means an empty store. */
   load(): void {
@@ -124,6 +172,7 @@ export class CronStore {
     }
     this.lastWritten = raw
     this.applyRaw(raw, false)
+    if (this.loadedVersion < STORE_VERSION) this.persist()
   }
 
   /**
@@ -141,7 +190,7 @@ export class CronStore {
       this.warn(`dsh-cron: corrupt job store moved to ${quarantine}; starting empty`)
       return
     }
-    if (!isRecord(parsed) || parsed.version !== STORE_VERSION || !Array.isArray(parsed.jobs)) {
+    if (!isRecord(parsed) || (parsed.version !== 1 && parsed.version !== STORE_VERSION) || !Array.isArray(parsed.jobs)) {
       if (hot) {
         this.warn(`dsh-cron: unsupported job store format in ${this.filePath}; keeping current state`)
         return
@@ -156,10 +205,21 @@ export class CronStore {
         continue
       }
       ids.add(entry.id)
-      jobs.push(normalizeJob(entry))
+      jobs.push(normalizeJob(entry, this.fallbackTarget))
     }
     this.jobList = jobs
     this.seq = typeof parsed.seq === 'number' && Number.isSafeInteger(parsed.seq) ? parsed.seq : jobs.length
+    this.eventSeq = typeof parsed.eventCursor === 'number' && Number.isSafeInteger(parsed.eventCursor) ? parsed.eventCursor : 0
+    this.loadedVersion = Number(parsed.version)
+    this.rebase()
+    const sidecar = this.readSeqSidecar()
+    if (sidecar !== null && sidecar > this.seq) this.seq = sidecar
+  }
+
+  private rebase(): void {
+    this.baseJobs.clear()
+    this.deletedIds.clear()
+    for (const job of this.jobList) this.baseJobs.set(job.id, JSON.stringify(job))
   }
 
   /** List jobs in insertion order. */
@@ -174,7 +234,14 @@ export class CronStore {
 
   /** Allocate the next never-reused job id. */
   allocateId(): string {
-    this.seq += 1
+    mkdirSync(dirname(this.filePath), { recursive: true })
+    const lock = acquireStoreWriteLock(this.writeLockDir)
+    try {
+      const diskSeq = this.readSeqSidecar()
+      if (diskSeq !== null && diskSeq > this.seq) this.seq = diskSeq
+      this.seq += 1
+      this.writeSeqSidecar()
+    } finally { lock.release() }
     return `cron-${this.seq}`
   }
 
@@ -189,12 +256,37 @@ export class CronStore {
     const index = this.jobList.findIndex(job => job.id === id)
     if (index === -1) return false
     this.jobList.splice(index, 1)
+    this.deletedIds.add(id)
     this.persist()
     return true
   }
 
   /** Persist after an in-place job mutation. */
   flush(): void {
+    this.persist()
+  }
+
+  /** Last globally applied Automation event sequence. */
+  eventCursor(): number {
+    return this.eventSeq
+  }
+
+  /** Persist a monotonic Automation event cursor after local effects are applied. */
+  advanceEventCursor(seq: number): void {
+    if (!Number.isSafeInteger(seq) || seq < this.eventSeq) throw new Error('dsh-cron: event cursor cannot move backwards')
+    this.eventSeq = seq
+    this.persist()
+  }
+
+  /** Append one source occurrence before any external submission. */
+  appendRun(job: CronJob, run: CronRunRecord): void {
+    job.runs.push(run)
+    const removable = job.runs.filter(item => terminalRun(item) && item !== run)
+    while (job.runs.length > this.maxRunHistory && removable.length > 0) {
+      const candidate = removable.shift() as CronRunRecord
+      job.runs.splice(job.runs.indexOf(candidate), 1)
+    }
+    job.lastRun = run
     this.persist()
   }
 
@@ -264,11 +356,89 @@ export class CronStore {
 
   private persist(): void {
     mkdirSync(dirname(this.filePath), { recursive: true })
-    const payload = JSON.stringify({ version: STORE_VERSION, seq: this.seq, jobs: this.jobList }, null, 2)
+    const lock = acquireStoreWriteLock(this.writeLockDir)
+    try {
+      const merged = this.mergeFromDisk()
+      if (merged !== null) this.jobList = merged
+      this.writeSnapshot()
+    } finally { lock.release() }
+  }
+
+  private writeSnapshot(): void {
+    this.seq = maxSeq(this.seq, this.jobList)
+    const payload = JSON.stringify({ version: STORE_VERSION, seq: this.seq, eventCursor: this.eventSeq, jobs: this.jobList }, null, 2)
     const content = `${payload}\n`
     this.lastWritten = content
     const temporary = `${this.filePath}.tmp-${process.pid}`
     writeFileSync(temporary, content)
     renameSync(temporary, this.filePath)
+    this.writeSeqSidecar()
+    this.rebase()
   }
+
+  private mergeFromDisk(): CronJob[] | null {
+    let raw: string
+    try {
+      raw = readFileSync(this.filePath, 'utf8')
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') this.warn(`dsh-cron: store merge read failed: ${String(error)}`)
+      return null
+    }
+    if (raw === this.lastWritten) return null
+    let parsed: unknown
+    try { parsed = JSON.parse(raw) } catch {
+      this.warn('dsh-cron: external store content is corrupt; writing local state over it')
+      return null
+    }
+    if (!isRecord(parsed) || (parsed.version !== 1 && parsed.version !== STORE_VERSION) || !Array.isArray(parsed.jobs)) {
+      this.warn('dsh-cron: unsupported external store format; writing local state over it')
+      return null
+    }
+    const latest = new Map<string, CronJob>()
+    for (const entry of parsed.jobs) {
+      if (isValidJob(entry)) latest.set(entry.id, normalizeJob(entry, this.fallbackTarget))
+    }
+    const diskSeq = typeof parsed.seq === 'number' && Number.isSafeInteger(parsed.seq) ? parsed.seq : 0
+    const diskCursor = typeof parsed.eventCursor === 'number' && Number.isSafeInteger(parsed.eventCursor) ? parsed.eventCursor : 0
+    this.seq = Math.max(this.seq, diskSeq)
+    this.eventSeq = Math.max(this.eventSeq, diskCursor)
+    return mergeJobs(this.jobList, this.baseJobs, latest, this.deletedIds)
+  }
+
+  private readSeqSidecar(): number | null {
+    try {
+      const value = Number(readFileSync(this.seqFile, 'utf8').trim())
+      return Number.isSafeInteger(value) && value > 0 ? value : null
+    } catch { return null }
+  }
+
+  private writeSeqSidecar(): void {
+    try { writeFileSync(this.seqFile, `${this.seq}\n`) }
+    catch (error) { this.warn(`dsh-cron: seq sidecar write failed: ${String(error)}`) }
+  }
+
+}
+
+function terminalRun(run: CronRunRecord): boolean {
+  return run.state === 'succeeded' || run.state === 'failed' || run.state === 'cancelled' || run.state === 'indeterminate' || run.state === 'legacy'
+}
+
+function maxSeq(floor: number, jobs: readonly CronJob[]): number {
+  let max = floor
+  for (const job of jobs) {
+    const value = Number(job.id.slice(job.id.lastIndexOf('-') + 1))
+    if (Number.isSafeInteger(value) && value > max) max = value
+  }
+  return max
+}
+
+const storeLockWait = new Int32Array(new SharedArrayBuffer(4))
+
+function acquireStoreWriteLock(lockDir: string): DirLock {
+  for (let attempt = 0; attempt < 100; attempt++) {
+    const lock = acquireDirLock(lockDir)
+    if (lock.acquired) return lock
+    Atomics.wait(storeLockWait, 0, 0, 5)
+  }
+  throw new Error(`dsh-cron: timed out acquiring store write lock ${lockDir}`)
 }

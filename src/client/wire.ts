@@ -18,10 +18,12 @@ export interface CronJobWire {
   readonly fireCount: number
   readonly state: 'active' | 'done'
   readonly paused: boolean
+  readonly migrationIssue?: string
   readonly lastRun: {
     readonly firedAt: string
     readonly completedAt?: string
-    readonly outcome: 'delivered' | 'completed' | 'error' | 'cancelled' | 'timeout'
+    readonly state: 'submitting' | 'queued' | 'claimed' | 'running' | 'cancelling' | 'succeeded' | 'failed' | 'cancelled' | 'indeterminate' | 'legacy'
+    readonly outcome?: 'completed' | 'blocked' | 'max-tokens' | 'error' | 'aborted' | 'cancelled' | 'interrupted' | 'not-dispatched'
     readonly excerpt?: string
   } | null
 }
@@ -55,5 +57,5 @@ export interface CronUpdateWire {
 /** Payload of the `fire` endpoint. */
 export interface CronFireWire {
   readonly id: string
-  readonly result: 'fired' | 'not_found' | 'no_target'
+  readonly result: 'submitted' | 'not_found' | 'target_required'
 }

@@ -7,6 +7,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { JsonValue } from '@deepseek-ai/dsh-session'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { CronScheduler } from './scheduler.ts'
+import { targetFromAgent } from './target.ts'
 
 /**
  * Register the three management tools on the global tool registry.
@@ -48,6 +49,7 @@ export function registerCronTools(ctx: Context, scheduler: CronScheduler): void 
           ...(args.time_zone !== undefined ? { timeZone: args.time_zone } : {}),
           ...(args.at !== undefined ? { at: args.at } : {}),
           createdBy: exec.agent === undefined ? null : String(exec.agent.id),
+          ...(exec.agent === undefined ? {} : { target: targetFromAgent(exec.agent) }),
         })
         return Promise.resolve({ ...result.job, deduplicated: result.deduplicated, nextOccurrences: result.nextOccurrences } as unknown as JsonValue)
       } catch (error) {
