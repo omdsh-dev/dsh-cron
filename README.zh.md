@@ -12,6 +12,8 @@ DSH Automation 的持久化日历 Trigger 适配器。它把一次性或周期�
 
 ## 安装
 
+需要 DSH `0.1.2-rc.1` 或更新的 `0.1.x` 版本，以及 dsh-automation `0.2.x`。
+
 ```sh
 dsh plugin --profile web add github:cofy-x/dsh-automation
 dsh plugin --profile web add github:omdsh-dev/dsh-cron

@@ -8,13 +8,13 @@ import type { ConnectionHandle } from '@deepseek-ai/dsh-client-connection/client
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
 // Type-only: pulls the locale plugin's Context merge (ctx.locale).
 import type {} from '@deepseek-ai/dsh-client-locale/client'
-// Legacy DSH releases expose the standard Client seats through runtime.
-import type {} from '@deepseek-ai/dsh-client-runtime/client'
 // Type-only: pulls the 'sidebar.footer.action' SlotMap merge declared by the
 // sidebar owner package into this compilation unit.
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client'
 // Current DSH releases own the SlotRegistry Context merge in the renderer.
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
+// DSH >=0.1.2 owns the global Session selector seat in ui-session.
+import type {} from '@deepseek-ai/dsh-client-ui-session/client'
 import { CronPanel } from './CronPanel.tsx'
 import { en, zh, type CronKey } from './locales.ts'
 
