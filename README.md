@@ -12,6 +12,8 @@ A durable calendar Trigger adapter for DSH Automation. It turns one-shot or recu
 
 ## Install
 
+Requires Node.js 24 or newer, DSH `0.1.2-rc.1` or newer within the `0.1.x` line, and dsh-automation `0.2.x`.
+
 Install dsh-automation first, then the adapter:
 
 ```sh

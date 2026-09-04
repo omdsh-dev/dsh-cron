@@ -49,7 +49,7 @@ describe('CronPanel', () => {
       connection,
       t: (key: string) => key,
       useSessions: selector => selector({ current: undefined } as never),
-      useWorkspaces: selector => selector({} as never),
+      useSessionPendingInteraction: selector => selector(new Map() as never),
     })
     expect(clientMocks.effects).toHaveLength(2)
     const cleanupPoll = clientMocks.effects[0]?.()
