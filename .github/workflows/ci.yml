@@ -36,6 +36,7 @@ jobs:
       - run: pnpm test
       - run: pnpm run build
       - run: pnpm run prepare
+      - run: pnpm pack --dry-run
       - run: node --input-type=module -e "import('./lib/index.js').then((m) => { if (m.default || m.name !== 'dsh-cron') process.exit(1) })"
 
   git-install-smoke:

@@ -16,7 +16,6 @@
     "verify:release": "node scripts/verify-release.mjs",
     "smoke:git": "node scripts/git-install-smoke.mjs",
     "prepare": "node scripts/prepare.mjs",
-    "prepack": "pnpm run typecheck && pnpm test && pnpm run build",
     "extract:patch": "node scripts/extract-patch.mjs",
     "patch:host": "bash scripts/patch.sh"
   },
@@ -161,7 +160,7 @@
   },
   "dshSmoke": {
     "peerSources": {
-      "dsh-automation": "github:cofy-x/dsh-automation#427bf0741032b610c21be916294a535b62e8c9a9"
+      "dsh-automation": "github:cofy-x/dsh-automation#62beda3a0f781ad894c1c1183dfef5df14072e0e"
     },
     "profileOverrides": {
       "@deepseek-ai/cordis": "4.0.2",
