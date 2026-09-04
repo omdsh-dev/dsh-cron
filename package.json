@@ -160,7 +160,7 @@
   },
   "dshSmoke": {
     "peerSources": {
-      "dsh-automation": "github:cofy-x/dsh-automation#62beda3a0f781ad894c1c1183dfef5df14072e0e"
+      "dsh-automation": "github:cofy-x/dsh-automation#f95b0d4639302cd436a39bd022d0144820327995"
     },
     "profileOverrides": {
       "@deepseek-ai/cordis": "4.0.2",
