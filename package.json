@@ -6,7 +6,7 @@
   "type": "module",
   "packageManager": "pnpm@11.7.0",
   "engines": {
-    "node": "^22.19.0 || >=24.0.0"
+    "node": ">=24.0.0"
   },
   "scripts": {
     "build": "tsc -b && tsdown --config-loader tsx",
@@ -161,7 +161,7 @@
   },
   "dshSmoke": {
     "peerSources": {
-      "dsh-automation": "github:cofy-x/dsh-automation#69dccc14c4e0f5140752e9494eeb3c26abb8f0a6"
+      "dsh-automation": "github:cofy-x/dsh-automation#427bf0741032b610c21be916294a535b62e8c9a9"
     },
     "profileOverrides": {
       "@deepseek-ai/cordis": "4.0.2",
