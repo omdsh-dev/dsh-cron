@@ -9,6 +9,8 @@ const dryRun = process.argv.includes('--dry-run')
 const packageSpec = `${manifest.name}@${manifest.version}`
 const distTag = manifest.version.includes('-') ? 'next' : 'latest'
 const repository = 'git+https://github.com/cofy-x/dsh-cron.git'
+const registryVisibilityAttempts = 60
+const registryVisibilityIntervalMs = 5_000
 
 if (manifest.name !== '@cofy-x/dsh-cron') throw new Error(`unexpected package name ${manifest.name}`)
 if (manifest.publishConfig?.access !== 'public') throw new Error('package must publish with public access')
@@ -33,16 +35,17 @@ execFileSync('npm', ['publish', '.', '--access', 'public', '--tag', distTag, '--
   stdio: 'inherit',
 })
 
-for (let attempt = 1; attempt <= 12; attempt += 1) {
+for (let attempt = 1; attempt <= registryVisibilityAttempts; attempt += 1) {
   const published = registryManifest()
   if (published !== undefined) {
     verifyRegistryIdentity(published)
     process.stdout.write(`published ${packageSpec} with dist-tag ${distTag}\n`)
     process.exit(0)
   }
-  await new Promise(resolve => setTimeout(resolve, 5_000))
+  await new Promise(resolve => setTimeout(resolve, registryVisibilityIntervalMs))
 }
-throw new Error(`${packageSpec} was published but did not become visible within 60 seconds`)
+const registryVisibilitySeconds = registryVisibilityAttempts * registryVisibilityIntervalMs / 1_000
+throw new Error(`${packageSpec} was published but did not become visible within ${registryVisibilitySeconds} seconds`)
 
 function verifyReleaseContext() {
   if (process.env.GITHUB_ACTIONS !== 'true') throw new Error('real publication is restricted to GitHub Actions')
