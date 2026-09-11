@@ -16,7 +16,7 @@ DSH Automation 的持久化日历 Trigger 适配器。它把一次性或周期�
 
 ```sh
 dsh plugin --profile web add dsh-automation@next
-dsh plugin --profile web add @cofy-x/dsh-cron@next
+dsh plugin --profile web add @cofy-x/dsh-cron
 ```
 
 如需测试尚未发布的源码 revision，则从 GitHub 安装：

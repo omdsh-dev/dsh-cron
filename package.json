@@ -1,9 +1,10 @@
 {
   "name": "@cofy-x/dsh-cron",
   "description": "Durable cron Trigger adapter for DSH Automation: calendar occurrences become idempotent fresh-Session Runs",
-  "version": "0.8.0-alpha.3",
+  "version": "0.8.0-alpha.4",
   "publishConfig": {
-    "access": "public"
+    "access": "public",
+    "tag": "latest"
   },
   "type": "module",
   "packageManager": "pnpm@11.7.0",

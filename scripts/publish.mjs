@@ -7,13 +7,14 @@ const root = dirname(dirname(fileURLToPath(import.meta.url)))
 const manifest = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))
 const dryRun = process.argv.includes('--dry-run')
 const packageSpec = `${manifest.name}@${manifest.version}`
-const distTag = manifest.version.includes('-') ? 'next' : 'latest'
+const distTag = manifest.publishConfig?.tag
 const repository = 'git+https://github.com/cofy-x/dsh-cron.git'
 const registryVisibilityAttempts = 60
 const registryVisibilityIntervalMs = 5_000
 
 if (manifest.name !== '@cofy-x/dsh-cron') throw new Error(`unexpected package name ${manifest.name}`)
 if (manifest.publishConfig?.access !== 'public') throw new Error('package must publish with public access')
+if (distTag !== 'latest') throw new Error('package must publish on the latest channel')
 if (manifest.repository?.url !== repository) throw new Error('package repository metadata is not canonical')
 
 if (dryRun) {
