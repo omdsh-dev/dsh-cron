@@ -31,7 +31,7 @@
 
     <path d="M72 330 L600 330" stroke="#222C38" stroke-width="1.5"/>
     <text x="72" y="362" font-family="ui-monospace, SFMono-Regular, Menlo, monospace"
-          font-size="18" fill="#8494A3">MIT · zero runtime deps · omdsh-dev/dsh-cron</text>
+          font-size="18" fill="#8494A3">MIT · zero runtime deps · cofy-x/dsh-cron</text>
   </g>
 
   <g id="loop-proof">

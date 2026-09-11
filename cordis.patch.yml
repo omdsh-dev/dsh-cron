@@ -5,7 +5,7 @@
 
 - insert:
     - id: dsh-cron
-      name: dsh-cron
+      name: '@cofy-x/dsh-cron'
       # config:
       #   dataDir: <string>            # job store directory; defaults to $DSH_HOME/cron
       #   defaultTimeZone: <string>    # IANA zone for schedules; defaults to the host local zone

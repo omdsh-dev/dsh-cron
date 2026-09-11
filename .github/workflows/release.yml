@@ -1,0 +1,71 @@
+name: Publish to npm
+
+on:
+  workflow_run:
+    workflows: ['release-check']
+    types: [completed]
+
+concurrency:
+  group: npm-publish-${{ github.event.workflow_run.head_sha }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  publish:
+    name: publish @cofy-x/dsh-cron
+    if: >-
+      github.repository == 'cofy-x/dsh-cron' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: npm
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+      - name: Install trusted-publishing npm version
+        run: npm install --global npm@11.5.1
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - run: pnpm run verify:self-contained
+      - run: pnpm peers check
+      - run: pnpm run typecheck
+      - run: pnpm test
+      - run: pnpm run build
+      - run: pnpm run prepare
+      - run: pnpm pack --dry-run
+      - name: Verify immutable release identity
+        env:
+          RELEASE_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          RELEASE_TAG="v$(node -p "require('./package.json').version")"
+          test "$(git rev-parse HEAD)" = "$RELEASE_SHA"
+          git fetch --no-tags origin main:refs/remotes/origin/main
+          node scripts/verify-release.mjs --ref "$RELEASE_TAG" --version "$RELEASE_TAG"
+          echo "RELEASE_TAG=$RELEASE_TAG" >> "$GITHUB_ENV"
+      - name: Publish package
+        run: pnpm run release:publish
+        env:
+          RELEASE_SHA: ${{ github.event.workflow_run.head_sha }}
+      - name: Create GitHub release after registry verification
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            exit 0
+          fi
+          args=(release create "$RELEASE_TAG" --verify-tag --generate-notes --title "$RELEASE_TAG")
+          if [[ "$RELEASE_TAG" == *-* ]]; then
+            args+=(--prerelease)
+          fi
+          gh "${args[@]}"

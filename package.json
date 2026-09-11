@@ -1,8 +1,10 @@
 {
-  "name": "dsh-cron",
+  "name": "@cofy-x/dsh-cron",
   "description": "Durable cron Trigger adapter for DSH Automation: calendar occurrences become idempotent fresh-Session Runs",
   "version": "0.8.0-alpha.2",
-  "private": true,
+  "publishConfig": {
+    "access": "public"
+  },
   "type": "module",
   "packageManager": "pnpm@11.7.0",
   "engines": {
@@ -14,6 +16,7 @@
     "typecheck": "tsc -b --pretty false && tsc -p tsconfig.vitest.json --pretty false",
     "verify:self-contained": "node scripts/verify-self-contained.mjs",
     "verify:release": "node scripts/verify-release.mjs",
+    "release:publish": "node scripts/publish.mjs",
     "smoke:git": "node scripts/git-install-smoke.mjs",
     "prepare": "node scripts/prepare.mjs",
     "extract:patch": "node scripts/extract-patch.mjs",
@@ -41,6 +44,10 @@
     "LICENSE"
   ],
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/cofy-x/dsh-cron.git"
+  },
   "peerDependencies": {
     "@deepseek-ai/cordis": ">=4.0.2 <5.0.0",
     "@deepseek-ai/dsh-client-connection": ">=0.1.5-rc.1 <0.2.0",

@@ -44,6 +44,7 @@ jobs:
         run: node scripts/verify-release.mjs --ref "$RELEASE_REF" --version "$RELEASE_VERSION"
       - run: pnpm install --frozen-lockfile --ignore-scripts
       - run: pnpm run verify:self-contained
+      - run: pnpm peers check
       - run: pnpm run typecheck
       - run: pnpm test
       - run: pnpm run build

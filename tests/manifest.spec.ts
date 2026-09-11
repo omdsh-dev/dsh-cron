@@ -2,8 +2,20 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
 const manifest = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as Record<string, any>
+const bundlePatch = readFileSync(new URL('../cordis.patch.yml', import.meta.url), 'utf8')
 
 describe('client bundle manifest', () => {
+  it('declares the public scoped package identity', () => {
+    expect(manifest.name).toBe('@cofy-x/dsh-cron')
+    expect(manifest.private).toBeUndefined()
+    expect(manifest.publishConfig).toEqual({ access: 'public' })
+    expect(manifest.repository).toEqual({
+      type: 'git',
+      url: 'git+https://github.com/cofy-x/dsh-cron.git',
+    })
+    expect(bundlePatch).toContain("name: '@cofy-x/dsh-cron'")
+  })
+
   it('declares the ./client export and the web client manifest', () => {
     expect(manifest.exports['./client'].default).toBe('./lib/client.js')
     expect(manifest.exports['./client'].types).toBe('./lib/types/client/index.d.ts')
