@@ -4,6 +4,7 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { createRequire } from 'node:module'
 import { spawnSync } from 'node:child_process'
+import { exactCommitPattern, isExactGitInstallRef } from './release-ref.mjs'
 
 const PACKAGE_NAME = '@cofy-x/dsh-cron'
 const REPOSITORY = 'cofy-x/dsh-cron'
@@ -31,9 +32,7 @@ function capture(command, args, cwd) {
 }
 
 const ref = argument('--ref')
-const installRefPattern = new RegExp('^(?:[0-9a-f]{40}|v[0-9]+\\.[0-9]+\\.[0-9]+)$')
-const exactCommitPattern = new RegExp('^[0-9a-f]{40}$')
-if (!installRefPattern.test(ref)) throw new Error('Git-install smoke ref must be an exact commit or release tag')
+if (!isExactGitInstallRef(ref)) throw new Error('Git-install smoke ref must be an exact commit or release tag')
 const resolvedCommit = exactCommitPattern.test(ref) ? ref : capture('git', ['rev-parse', `${ref}^{commit}`], root)
 if (!exactCommitPattern.test(resolvedCommit)) throw new Error(`could not resolve ${ref} to an exact commit`)
 
