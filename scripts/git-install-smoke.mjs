@@ -5,8 +5,9 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import { createRequire } from 'node:module'
 import { spawnSync } from 'node:child_process'
 
-const PACKAGE_NAME = 'dsh-cron'
-const REPOSITORY = 'omdsh-dev/dsh-cron'
+const PACKAGE_NAME = '@cofy-x/dsh-cron'
+const REPOSITORY = 'cofy-x/dsh-cron'
+const TEMP_PREFIX = 'dsh-cron'
 const root = dirname(dirname(fileURLToPath(import.meta.url)))
 
 function argument(name) {
@@ -57,12 +58,13 @@ for (const [name, source] of Object.entries(expected.dshSmoke?.peerSources ?? {}
   if (match === null) throw new Error(`audited peer source for ${name} must pin an exact GitHub commit`)
   peerBuildAllowlist.push(`  '${name}@https://codeload.github.com/${match[1]}/tar.gz/${match[2]}': true`)
 }
-const workspace = mkdtempSync(join(tmpdir(), `${PACKAGE_NAME}-git-smoke-`))
+const workspace = mkdtempSync(join(tmpdir(), `${TEMP_PREFIX}-git-smoke-`))
 try {
   writeFileSync(join(workspace, 'package.json'), JSON.stringify({ private: true, type: 'module', packageManager: expected.packageManager }, null, 2))
   writeFileSync(join(workspace, 'pnpm-workspace.yaml'), [
     'packages:',
     "  - '.'",
+    'autoInstallPeers: false',
     'allowBuilds:',
     `  '${PACKAGE_NAME}@https://codeload.github.com/${REPOSITORY}/tar.gz/${resolvedCommit}': true`,
     ...peerBuildAllowlist,
@@ -72,6 +74,7 @@ try {
   // plugin's direct peers lets pnpm resolve their peers through npm's default
   // dist-tag, which does not represent DSH's coordinated prerelease profile.
   run('pnpm', ['add', '--save-exact', `github:${REPOSITORY}#${ref}`, ...auditedProfile], workspace)
+  run('pnpm', ['peers', 'check'], workspace)
 
   const require = createRequire(join(workspace, 'smoke.cjs'))
   const entry = require.resolve(PACKAGE_NAME)

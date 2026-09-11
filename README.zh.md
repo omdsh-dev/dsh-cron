@@ -12,11 +12,18 @@ DSH Automation 的持久化日历 Trigger 适配器。它把一次性或周期�
 
 ## 安装
 
-需要 Node.js 24 或更新版本、DSH `0.1.2-rc.1` 或更新的 `0.1.x` 版本，以及 dsh-automation `0.2.x`。
+需要 Node.js 24 或更新版本、DSH `0.1.5-rc.1` 或更新的 `0.1.x` 版本，以及 dsh-automation `0.2.x`。
+
+```sh
+dsh plugin --profile web add dsh-automation@next
+dsh plugin --profile web add @cofy-x/dsh-cron@next
+```
+
+如需测试尚未发布的源码 revision，则从 GitHub 安装：
 
 ```sh
 dsh plugin --profile web add github:cofy-x/dsh-automation
-dsh plugin --profile web add github:omdsh-dev/dsh-cron
+dsh plugin --profile web add github:cofy-x/dsh-cron
 ```
 
 插件通过 `dsh.client` manifest 提供浏览器任务中心，在 headless profile 中也可通过工具、命令与 RPC 使用。

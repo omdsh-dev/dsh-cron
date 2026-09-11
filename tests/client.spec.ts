@@ -48,6 +48,7 @@ describe('CronPanel', () => {
       wide: true,
       connection,
       t: (key: string) => key,
+      usePanelInfo: selector => selector({ activePanelId: null } as never),
       useSessions: selector => selector({ current: undefined } as never),
       useSessionPendingInteraction: selector => selector(new Map() as never),
     })

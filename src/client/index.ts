@@ -13,7 +13,7 @@ import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client'
 // Current DSH releases own the SlotRegistry Context merge in the renderer.
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
-// DSH >=0.1.2 owns the global Session selector seat in ui-session.
+// The session package owns the global Session selector seat.
 import type {} from '@deepseek-ai/dsh-client-ui-session/client'
 import { CronPanel } from './CronPanel.tsx'
 import { en, zh, type CronKey } from './locales.ts'

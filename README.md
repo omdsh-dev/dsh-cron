@@ -12,13 +12,20 @@ A durable calendar Trigger adapter for DSH Automation. It turns one-shot or recu
 
 ## Install
 
-Requires Node.js 24 or newer, DSH `0.1.2-rc.1` or newer within the `0.1.x` line, and dsh-automation `0.2.x`.
+Requires Node.js 24 or newer, DSH `0.1.5-rc.1` or newer within the `0.1.x` line, and dsh-automation `0.2.x`.
 
 Install dsh-automation first, then the adapter:
 
 ```sh
+dsh plugin --profile web add dsh-automation@next
+dsh plugin --profile web add @cofy-x/dsh-cron@next
+```
+
+To test unreleased source revisions, install from GitHub instead:
+
+```sh
 dsh plugin --profile web add github:cofy-x/dsh-automation
-dsh plugin --profile web add github:omdsh-dev/dsh-cron
+dsh plugin --profile web add github:cofy-x/dsh-cron
 ```
 
 The plugin contributes a browser task center through its `dsh.client` manifest and works in headless profiles through tools, commands, and RPC.
