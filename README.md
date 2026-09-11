@@ -18,7 +18,7 @@ Install dsh-automation first, then the adapter:
 
 ```sh
 dsh plugin --profile web add dsh-automation@next
-dsh plugin --profile web add @cofy-x/dsh-cron@next
+dsh plugin --profile web add @cofy-x/dsh-cron
 ```
 
 To test unreleased source revisions, install from GitHub instead:

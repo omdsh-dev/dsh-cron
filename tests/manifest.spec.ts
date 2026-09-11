@@ -8,7 +8,7 @@ describe('client bundle manifest', () => {
   it('declares the public scoped package identity', () => {
     expect(manifest.name).toBe('@cofy-x/dsh-cron')
     expect(manifest.private).toBeUndefined()
-    expect(manifest.publishConfig).toEqual({ access: 'public' })
+    expect(manifest.publishConfig).toEqual({ access: 'public', tag: 'latest' })
     expect(manifest.repository).toEqual({
       type: 'git',
       url: 'git+https://github.com/cofy-x/dsh-cron.git',
