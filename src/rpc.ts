@@ -57,14 +57,7 @@ function payloadOptionalId(payload: unknown, key: string): string | undefined {
  * @returns the channel disposer.
  */
 export function registerCronRpc(ctx: Context, service: CronService): () => void {
-  // rc.2 required an authority option; alpha.1 authenticates every channel and
-  // removed that parameter. JavaScript safely ignores the retained option.
-  const register = ctx.connection.rpc.handle as unknown as (
-    channel: string,
-    handler: (endpoint: string, payload: unknown, signal: AbortSignal) => Promise<RpcResult<unknown>>,
-    options?: { authority: 'loopback' },
-  ) => () => Promise<void>
-  const handle = register(CRON_RPC_CHANNEL, async (endpoint, payload, _signal) => {
+  const handle = ctx.connection.rpc.handle(CRON_RPC_CHANNEL, async (endpoint, payload, _signal) => {
     try {
       switch (endpoint) {
         case 'list': return ok({ jobs: service.list(), generatedAt: Date.now() })
@@ -99,6 +92,6 @@ export function registerCronRpc(ctx: Context, service: CronService): () => void 
     } catch (error) {
       return transportError<unknown>(error)
     }
-  }, { authority: 'loopback' })
+  })
   return () => { void handle() }
 }

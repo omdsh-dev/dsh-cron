@@ -19,4 +19,23 @@ describe('client bundle manifest', () => {
       expect(manifest.peerDependenciesMeta[name]?.optional, name).toBe(true)
     }
   })
+
+  it('targets one coordinated DSH release profile', () => {
+    const dshPeers = Object.entries(manifest.peerDependencies)
+      .filter(([name]) => name.startsWith('@deepseek-ai/dsh-'))
+    const dshDevelopmentPackages = Object.entries(manifest.devDependencies)
+      .filter(([name]) => name.startsWith('@deepseek-ai/dsh-'))
+    const dshSmokePackages = Object.entries(manifest.dshSmoke.profileOverrides)
+      .filter(([name]) => name.startsWith('@deepseek-ai/dsh-'))
+
+    expect(dshPeers.length).toBeGreaterThan(0)
+    expect(dshDevelopmentPackages.length).toBeGreaterThan(0)
+    expect(dshSmokePackages.length).toBeGreaterThan(0)
+    for (const [name, range] of dshPeers) {
+      expect(range, name).toBe('>=0.1.5-rc.1 <0.2.0')
+    }
+    for (const [name, version] of [...dshDevelopmentPackages, ...dshSmokePackages]) {
+      expect(version, name).toBe('0.1.5-rc.1')
+    }
+  })
 })
